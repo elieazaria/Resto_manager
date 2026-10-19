@@ -1,5 +1,41 @@
 -- Schéma initial de Resto Manager (PostgreSQL / Supabase)
 -- Les montants sont en Ariary (entiers, pas de décimales).
+- Création sécurisée des types énumérés (évite les erreurs s'ils existent déjà)
+DO $$ BEGIN
+    create type user_role as enum ('manager', 'cashier');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    create type stock_kind as enum ('ingredient', 'product');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    create type menu_kind as enum ('cooked', 'resale');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    create type order_status as enum ('open', 'paid', 'cancelled');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    create type payment_method as enum ('cash', 'mvola', 'orange_money', 'airtel_money', 'card');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    create type movement_reason as enum ('purchase', 'sale', 'void', 'adjustment');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 create type user_role as enum ('manager', 'cashier');
 create type stock_kind as enum ('ingredient', 'product');
