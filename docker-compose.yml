@@ -1,0 +1,46 @@
+# Auto-hébergement ou développement local SANS Supabase.
+#   docker compose up -d db                 → Postgres seul (pour `npm run dev`)
+#   docker compose up -d --build            → base + application sur http://localhost:3000
+#   docker compose --profile https up -d    → + Caddy (HTTPS automatique, variable DOMAIN)
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: resto
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-resto}
+      POSTGRES_DB: resto
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U resto -d resto"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://resto:${POSTGRES_PASSWORD:-resto}@db:5432/resto
+      DATABASE_SSL: disable
+      WEB_DIST: /app/apps/web/dist
+    ports: ["3000:3000"]
+
+  caddy:
+    profiles: ["https"]
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [app]
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:?définir DOMAIN dans .env}
+    command: caddy reverse-proxy --from ${DOMAIN} --to app:3000
+    volumes: ["caddy_data:/data"]
+
+volumes:
+  pgdata:
+  caddy_data:

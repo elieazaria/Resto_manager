@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque Variable", "Figtree Variable", ui-sans-serif, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: #ffffff;
+  --color-ink: var(--ink);
+  --color-ink-foreground: var(--ink-foreground);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}
+
+/* Identité : vert ravenala (encre) + jaune vanille/safran, sur fond pierre claire. */
+:root {
+  --background: #f4f6f0;
+  --foreground: #14231c;
+  --card: #ffffff;
+  --muted: #e8ece2;
+  --muted-foreground: #55655b;
+  --border: #d6dccf;
+  --input: #c4ccbb;
+  --ring: #1f7a5a;
+  --primary: #17614a;
+  --primary-foreground: #f4f6f0;
+  --accent: #f2b636;
+  --accent-foreground: #2a1e00;
+  --destructive: #b42318;
+  --ink: #0f2a21;
+  --ink-foreground: #dfe8e0;
+  --ok: #17614a;
+  --warn: #a15c00;
+
+  /* Séries de graphiques (palette catégorielle validée, ordre fixe) */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  color-scheme: light;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+}
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Impression du ticket : seul #print-root est imprimé ── */
+#print-root { display: none; }
+@media print {
+  @page { margin: 0; }
+  html, body { background: #fff !important; }
+  body > *:not(#print-root) { display: none !important; }
+  #print-root { display: block !important; }
+}
+.ticket {
+  width: var(--ticket-width, 72mm);
+  margin: 0;
+  padding: 2mm 1mm 6mm;
+  color: #000;
+  background: #fff;
+  font-family: "Courier New", ui-monospace, monospace;
+  line-height: 1.25;
+}
+.ticket div { white-space: pre; }
+.ticket .big { font-size: 2em; line-height: 1.1; }
+.ticket .bold { font-weight: 700; }

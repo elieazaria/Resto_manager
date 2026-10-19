@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Resto Manager",
+    "slug": "resto-manager",
+    "scheme": "restomanager",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": { "image": "./assets/splash-icon.png", "resizeMode": "contain", "backgroundColor": "#1f2a24" },
+    "android": {
+      "package": "mg.resto.manager",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#1f2a24",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-build-properties", { "android": { "usesCleartextTraffic": true } }]
+    ],
+    "extra": {
+      "defaultApiUrl": "https://votre-serveur.example.com"
+    }
+  }
+}
