@@ -8,7 +8,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "splash": { "image": "./assets/splash-icon.png", "resizeMode": "contain", "backgroundColor": "#1f2a24" },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1f2a24"
+    },
     "android": {
       "package": "mg.resto.manager",
       "versionCode": 1,
@@ -23,10 +27,25 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      ["expo-build-properties", { "android": { "usesCleartextTraffic": true } }]
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "extra": {
-      "defaultApiUrl": "https://votre-serveur.example.com"
+      "defaultApiUrl": "https://votre-serveur.example.com",
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "d1d057a5-1c6f-43e1-a324-db9ca60d6419"
+      }
     }
   }
 }

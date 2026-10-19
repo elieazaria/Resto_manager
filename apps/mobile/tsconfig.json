@@ -3,10 +3,19 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "@resto/shared": ["../../packages/shared/src/index.ts"],
-      "zod": ["./node_modules/zod"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@resto/shared": [
+        "../../packages/shared/src/index.ts"
+      ],
+      "zod": [
+        "./node_modules/zod"
+      ]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ]
 }
