@@ -35,7 +35,17 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@babel/plugin-transform-arrow-functions": "^7.29.7",
+    "@babel/plugin-transform-react-jsx-self": "^7.29.7",
+    "@babel/plugin-transform-react-jsx-source": "^7.29.7",
+    "@babel/plugin-transform-regenerator": "^7.29.8",
+    "@babel/plugin-transform-shorthand-properties": "^7.29.7",
+    "@babel/plugin-transform-template-literals": "^7.29.7",
+    "@react-native/babel-preset": "^0.88.0",
+    "@react-native/metro-babel-transformer": "^0.88.0",
+    "@react-native/metro-config": "^0.88.0",
     "@types/react": "~19.3.0",
+    "react-native-worklets": "^0.13.0",
     "typescript": "~6.0.3"
   }
 }
