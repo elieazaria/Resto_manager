@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { dateSchema, openingBalanceSchema, todayInTz, type DashboardDto, type YearlyRowDto } from '@resto/shared';
-import { audit } from '../auth.js';
+import { dateSchema, todayInTz, type DashboardDto, type SalesReportDto, type YearlyRowDto } from '@resto/shared';
 import type { Ctx } from '../context.js';
+import { badRequest } from '../errors.js';
 import { STOCK_LEVELS_SQL } from '../services/stock.js';
 
 /** [1er jour du mois, 1er jour du mois suivant[ — en texte AAAA-MM-JJ, sans passer par un fuseau. */
@@ -22,7 +22,7 @@ export function dashboardRoutes(app: FastifyInstance, ctx: Ctx) {
     const [start, next] = monthBounds(date);
     const db = ctx.db;
 
-    const [sales, purchases, expenses, opening, series, top, methods, low, open] = await Promise.all([
+    const [sales, purchases, expenses, series, top, methods, low, open] = await Promise.all([
       db.query<{ sales_day: number; sales_month: number; orders_day: number; orders_month: number }>(
         `select coalesce(sum(total) filter (where business_date = $1::date), 0)::bigint as sales_day,
                 coalesce(sum(total), 0)::bigint as sales_month,
@@ -43,7 +43,6 @@ export function dashboardRoutes(app: FastifyInstance, ctx: Ctx) {
          from expenses where date >= $2::date and date < $3::date`,
         [date, start, next],
       ),
-      db.query<{ amount: number }>('select amount from cash_openings where date = $1::date', [date]),
       db.query<{ date: string; total: number }>(
         `select d::date as date, coalesce(sum(o.total), 0)::bigint as total
          from generate_series($1::timestamp - interval '29 days', $1::timestamp, interval '1 day') d
@@ -73,7 +72,6 @@ export function dashboardRoutes(app: FastifyInstance, ctx: Ctx) {
     const s = sales.rows[0]!;
     const p = purchases.rows[0]!;
     const e = expenses.rows[0]!;
-    const openingAmount = opening.rows[0]?.amount ?? 0;
     return {
       date,
       kpis: {
@@ -88,12 +86,6 @@ export function dashboardRoutes(app: FastifyInstance, ctx: Ctx) {
         profit_day: s.sales_day - p.d - e.d,
         profit_month: s.sales_month - p.m - e.m,
       },
-      cash: {
-        opening: openingAmount,
-        inflow: s.sales_day,
-        outflow: p.d + e.d,
-        remaining: openingAmount + s.sales_day - (p.d + e.d),
-      },
       series: series.rows,
       top_items: top.rows,
       by_method: methods.rows,
@@ -107,8 +99,9 @@ export function dashboardRoutes(app: FastifyInstance, ctx: Ctx) {
     const { year = Number(todayInTz(ctx.cfg.APP_TZ).slice(0, 4)) } = z
       .object({ year: z.coerce.number().int().min(2000).max(2100).optional() })
       .parse(req.query);
-    const { rows } = await ctx.db.query<{ month: number; sales: number; purchases: number; expenses: number }>(
+    const { rows } = await ctx.db.query<{ month: number; sales: number; orders: number; purchases: number; expenses: number }>(
       `select m::int as month,
+        (select count(*) from orders where status = 'paid' and business_date >= make_date($1, m::int, 1) and business_date < make_date($1, m::int, 1) + interval '1 month')::bigint as orders,
         coalesce((select sum(total) from orders where status = 'paid' and business_date >= make_date($1, m::int, 1) and business_date < make_date($1, m::int, 1) + interval '1 month'), 0)::bigint as sales,
         coalesce((select sum(round(quantity * unit_price)) from purchases where date >= make_date($1, m::int, 1) and date < make_date($1, m::int, 1) + interval '1 month'), 0)::bigint as purchases,
         coalesce((select sum(amount) from expenses where date >= make_date($1, m::int, 1) and date < make_date($1, m::int, 1) + interval '1 month'), 0)::bigint as expenses
@@ -118,14 +111,41 @@ export function dashboardRoutes(app: FastifyInstance, ctx: Ctx) {
     return rows.map((r) => ({ ...r, profit: r.sales - r.purchases - r.expenses }));
   });
 
-  /** « Solde initial (à saisir) » de la trésorerie du jour. */
-  app.put('/dashboard/opening-balance', admin, async (req) => {
-    const b = openingBalanceSchema.parse(req.body);
-    await ctx.db.query(
-      'insert into cash_openings (date, amount) values ($1::date, $2) on conflict (date) do update set amount = excluded.amount',
-      [b.date, b.amount],
-    );
-    await audit(ctx.db, req.user, 'cash.opening', 'cash_opening', b.date, { amount: b.amount });
-    return b;
+  /** Statistiques de ventes d'une période [from, to] (inclus) : total, ticket moyen, meilleures ventes, répartitions. */
+  app.get('/dashboard/report', admin, async (req): Promise<SalesReportDto> => {
+    const q = z.object({ from: dateSchema, to: dateSchema }).parse(req.query);
+    if (q.to < q.from) throw badRequest('La fin doit suivre le début');
+    if ((Date.parse(q.to) - Date.parse(q.from)) / 86_400_000 > 800) throw badRequest('Période trop longue (800 jours maximum)');
+    const db = ctx.db;
+    const where = `o.status = 'paid' and o.business_date >= $1::date and o.business_date <= $2::date`;
+    const args = [q.from, q.to];
+    const [tot, methods, cats, top, series] = await Promise.all([
+      db.query<{ total: number; orders: number; items: number }>(
+        `select coalesce(sum(o.total), 0)::bigint as total, count(*)::bigint as orders,
+                coalesce((select sum(l.quantity) from order_lines l join orders o2 on o2.id = l.order_id
+                          where o2.status = 'paid' and o2.business_date >= $1::date and o2.business_date <= $2::date), 0)::bigint as items
+         from orders o where ${where}`, args),
+      db.query<SalesReportDto['by_method'][number]>(
+        `select o.payment_method as method, sum(o.total)::bigint as total, count(*)::bigint as count
+         from orders o where ${where} group by o.payment_method order by total desc`, args),
+      db.query<SalesReportDto['by_category'][number]>(
+        `select coalesce(c.name, 'Autres') as name, sum(l.quantity)::bigint as quantity, sum(l.quantity * l.unit_price)::bigint as revenue
+         from order_lines l join orders o on o.id = l.order_id
+         left join menu_items m on m.id = l.menu_item_id left join categories c on c.id = m.category_id
+         where ${where} group by 1 order by revenue desc`, args),
+      db.query<SalesReportDto['top_items'][number]>(
+        `select l.name, max(c.name) as category_name, sum(l.quantity)::bigint as quantity, sum(l.quantity * l.unit_price)::bigint as revenue
+         from order_lines l join orders o on o.id = l.order_id
+         left join menu_items m on m.id = l.menu_item_id left join categories c on c.id = m.category_id
+         where ${where} group by l.name order by quantity desc, revenue desc limit 20`, args),
+      db.query<SalesReportDto['series'][number]>(
+        `select o.business_date as date, sum(o.total)::bigint as total, count(*)::bigint as orders
+         from orders o where ${where} group by o.business_date order by o.business_date`, args),
+    ]);
+    const t = tot.rows[0]!;
+    return {
+      from: q.from, to: q.to, total: t.total, orders: t.orders, avg_ticket: t.orders ? Math.round(t.total / t.orders) : 0, items_sold: t.items,
+      by_method: methods.rows, by_category: cats.rows, top_items: top.rows, series: series.rows,
+    };
   });
 }

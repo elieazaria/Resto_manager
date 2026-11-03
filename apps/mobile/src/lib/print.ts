@@ -1,4 +1,4 @@
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import * as Print from 'expo-print';
 import type { OrderDto, Settings } from '@resto/shared';
 import { buildTicketEscPos, toBase64 } from './escpos';
@@ -15,11 +15,13 @@ export interface DevicePrefs {
   autoPrint: boolean;
 }
 const KEY = 'resto.device';
-let prefs: DevicePrefs = { mode: 'rawbt', autoPrint: true };
+// RawBT n'existe que sur Android : sur iOS, impression système (AirPrint).
+let prefs: DevicePrefs = { mode: Platform.OS === 'android' ? 'rawbt' : 'system', autoPrint: true };
 
 export const getPrefs = () => prefs;
 export async function loadPrefs() {
   prefs = { ...prefs, ...(await getJson<Partial<DevicePrefs>>(KEY, {})) };
+  if (Platform.OS !== 'android' && prefs.mode === 'rawbt') prefs.mode = 'system';
   return prefs;
 }
 export async function setPrefs(p: Partial<DevicePrefs>) {
@@ -47,7 +49,7 @@ function ticketHtml(order: OrderDto, settings: Settings) {
 /** Imprime un ticket (addition si non payé, ticket de caisse sinon). Renvoie une erreur lisible si l'impression échoue. */
 export async function printTicket(order: OrderDto, settings: Settings): Promise<string | null> {
   try {
-    if (prefs.mode === 'rawbt') {
+    if (prefs.mode === 'rawbt' && Platform.OS === 'android') {
       const bytes = buildTicketEscPos(order, settings);
       await Linking.openURL(`rawbt:base64,${toBase64(bytes)}`);
     } else {

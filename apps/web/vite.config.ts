@@ -33,7 +33,7 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/, /^\/ws/, /^\/healthz/],
+        navigateFallbackDenylist: [/^\/api/, /^\/healthz/],
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
@@ -55,7 +55,6 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': 'http://localhost:3000',
-      '/ws': { target: 'ws://localhost:3000', ws: true },
     },
   },
   build: { chunkSizeWarningLimit: 700 },

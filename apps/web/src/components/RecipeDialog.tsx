@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
@@ -13,7 +13,7 @@ import { api } from '@/lib/api';
 import { errorMessage } from '@/lib/utils';
 
 type RecipeForm = z.infer<typeof recipeSchema>;
-interface StockItem { id: string; name: string; unit: string; kind: string; is_active: boolean }
+interface StockItem { id: string; name: string; unit: string; kind: string; is_active: boolean; purchase_unit: string; purchase_factor: number }
 
 /** Composition d'un plat : chaque vente décompte ces quantités du stock. */
 export function RecipeDialog({ item, onClose }: { item: { id: string; name: string }; onClose: () => void }) {
@@ -26,8 +26,16 @@ export function RecipeDialog({ item, onClose }: { item: { id: string; name: stri
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
   useEffect(() => { if (recipe.data) reset({ lines: recipe.data.lines }); }, [recipe.data, reset]);
 
-  const ingredients = (stock.data ?? []).filter((s) => s.kind === 'ingredient' && s.is_active);
+  // Ingrédients ET produits (ex. verre de jus = 250 ml du produit « Jus naturel 1,5 L »)
+  const ingredients = (stock.data ?? []).filter((s) => s.is_active);
   const unitOf = (id: string) => stock.data?.find((s) => s.id === id)?.unit ?? '';
+  const watched = useWatch({ control, name: 'lines' });
+  const equiv = (i: number) => {
+    const it = stock.data?.find((s) => s.id === watched?.[i]?.stock_item_id);
+    const q = Number(watched?.[i]?.qty_per_portion);
+    if (!it || !Number.isFinite(q) || it.purchase_factor === 1) return '';
+    return ` = ${(Math.round((q / it.purchase_factor) * 1000) / 1000).toLocaleString('fr-FR')} ${it.purchase_unit}`;
+  };
 
   const save = handleSubmit(async (v) => {
     try {
@@ -45,19 +53,19 @@ export function RecipeDialog({ item, onClose }: { item: { id: string; name: stri
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent size="lg">
         <form onSubmit={save} className="flex min-h-0 flex-1 flex-col">
-          <DialogHeader title={`Recette : ${item.name}`} description="Quantité d'ingrédient consommée pour une portion." />
+          <DialogHeader title={`Recette : ${item.name}`} description="Quantité de stock consommée pour une portion (ingrédient ou produit : ex. 250 ml de « Jus naturel 1,5 L » pour un verre = 1/6 de bouteille)." />
           <DialogBody className="space-y-2">
             {fields.map((f, i) => (
               <div key={f.id} className="grid grid-cols-[1fr_7rem_auto] items-start gap-2">
                 <div>
                   <Select aria-label="Ingrédient" aria-invalid={!!errors.lines?.[i]?.stock_item_id} {...register(`lines.${i}.stock_item_id`)}>
                     <option value="">— Ingrédient —</option>
-                    {ingredients.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {ingredients.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.unit})</option>)}
                   </Select>
                 </div>
                 <div>
                   <Input type="number" step="any" inputMode="decimal" aria-label="Quantité par portion" aria-invalid={!!errors.lines?.[i]?.qty_per_portion} {...register(`lines.${i}.qty_per_portion`, { valueAsNumber: true })} />
-                  <p className="mt-0.5 text-xs text-muted-foreground">{unitOf(fields[i]?.stock_item_id ?? '')}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{unitOf(watched?.[i]?.stock_item_id ?? '')}{equiv(i)}</p>
                 </div>
                 <Button variant="ghost" size="icon" aria-label="Retirer" onClick={() => remove(i)}><Trash2 className="text-destructive" /></Button>
               </div>

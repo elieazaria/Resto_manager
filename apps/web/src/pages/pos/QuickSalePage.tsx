@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Minus, Plus, Printer, Trash2 } from 'lucide-react';
+import { CheckCircle2, Minus, Plus, Printer, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import {
@@ -49,10 +49,10 @@ export default function QuickSalePage() {
 
   const items = menu.data?.items ?? [];
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
-  const grouped = useMemo(
-    () => (menu.data?.categories ?? []).map((c) => ({ ...c, items: items.filter((i) => i.category_id === c.id) })),
-    [menu.data, items],
-  );
+  const [search, setSearch] = useState('');
+  const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const needle = norm(search);
+  const matches = useMemo(() => (needle ? items.filter((i) => norm(i.name).includes(needle)) : items), [items, needle]);
 
   const [orderId, setOrderId] = useState(uuid); // identifiant choisi côté appareil : le renvoi ne crée jamais de doublon
   const [existing, setExisting] = useState<OrderDto | null>(null);
@@ -72,6 +72,23 @@ export default function QuickSalePage() {
   const total = (lines ?? []).reduce((s, l) => s + (byId.get(l.menu_item_id)?.price ?? 0) * (Number.isFinite(l.quantity) ? l.quantity : 0), 0);
   const change = method === 'cash' && received != null && Number.isFinite(received) ? received - total : null;
   const chosen = new Set((lines ?? []).map((l) => l.menu_item_id).filter(Boolean));
+
+  // Le menu déroulant suit la recherche, mais garde les plats déjà choisis pour que les lignes restent lisibles
+  const grouped = (menu.data?.categories ?? [])
+    .map((c) => ({ ...c, items: items.filter((i) => i.category_id === c.id && (!needle || chosen.has(i.id) || norm(i.name).includes(needle))) }))
+    .filter((c) => c.items.length);
+
+  /** Clic sur un résultat de recherche : +1 si déjà dans la vente, sinon remplit la première ligne vide ou en ajoute une. */
+  const quickAdd = (id: string) => {
+    const cur = getValues('lines');
+    const at = cur.findIndex((l) => l.menu_item_id === id);
+    if (at >= 0) setValue(`lines.${at}.quantity`, Math.min(99, (Number(cur[at]!.quantity) || 0) + 1), { shouldDirty: true });
+    else {
+      const empty = cur.findIndex((l) => !l.menu_item_id);
+      if (empty >= 0) { setValue(`lines.${empty}.menu_item_id`, id, { shouldDirty: true }); setValue(`lines.${empty}.quantity`, 1, { shouldDirty: true }); }
+      else append({ menu_item_id: id, quantity: 1 });
+    }
+  };
 
   // Table qui a déjà une commande ouverte : on la reprend (mêmes lignes, même identifiant) au lieu d'en créer une 2e.
   useEffect(() => {
@@ -225,6 +242,24 @@ export default function QuickSalePage() {
           <div className="flex items-center justify-between">
             <h2 className="font-display text-lg font-semibold">Plats</h2>
             <Button size="sm" variant="outline" onClick={() => append({ ...emptyLine })}><Plus /> Ajouter un plat</Button>
+          </div>
+
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un plat ou une boisson (ex. jus, coca…)" aria-label="Rechercher dans le menu" className="pl-9" />
+            </div>
+            {needle && (
+              <div className="flex flex-wrap gap-2" aria-live="polite">
+                {matches.slice(0, 12).map((it) => (
+                  <Button key={it.id} size="sm" variant={chosen.has(it.id) ? 'default' : 'outline'} onClick={() => quickAdd(it.id)}>
+                    <Plus /> {it.name} · {money(it.price)}
+                  </Button>
+                ))}
+                {!matches.length && <p className="text-sm text-muted-foreground">Aucun plat ne correspond à « {search} ».</p>}
+                {matches.length > 12 && <p className="self-center text-xs text-muted-foreground">+ {matches.length - 12} autres : précisez la recherche.</p>}
+              </div>
+            )}
           </div>
 
           <ul className="space-y-3">

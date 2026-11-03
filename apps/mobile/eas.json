@@ -1,20 +1,12 @@
 {
-  "cli": {
-    "version": ">= 16.0.0"
-  },
+  "cli": { "version": ">= 16.0.0" },
   "build": {
     "preview": {
       "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      },
-      "preInstall": "npm install --legacy-peer-deps"
+      "android": { "buildType": "apk" }
     },
     "production": {
-      "android": {
-        "buildType": "app-bundle"
-      },
-      "preInstall": "npm install --legacy-peer-deps"
+      "android": { "buildType": "app-bundle" }
     }
   }
 }

@@ -5,17 +5,18 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
-import websocket from '@fastify/websocket';
 import { ZodError } from 'zod';
 import { createAuth } from './auth.js';
 import type { Config } from './config.js';
 import type { Ctx } from './context.js';
 import type { Db } from './db.js';
 import { HttpError } from './errors.js';
-import { Hub } from './realtime.js';
 import { authRoutes } from './routes/auth.js';
 import { catalogRoutes } from './routes/catalog.js';
 import { dashboardRoutes } from './routes/dashboard.js';
+import { hotelRoutes } from './routes/hotel.js';
+import { backSalesRoutes } from './routes/backSales.js';
+import { profitabilityRoutes } from './routes/profitability.js';
 import { orderRoutes } from './routes/orders.js';
 import { settingsRoutes } from './routes/settings.js';
 import { stockRoutes } from './routes/stock.js';
@@ -34,8 +35,7 @@ export async function buildApp(cfg: Config, db: Db, opts: { logger?: boolean } =
   });
 
   const auth = createAuth(cfg, db);
-  const hub = new Hub();
-  const ctx: Ctx = { cfg, db, auth, hub };
+  const ctx: Ctx = { cfg, db, auth };
 
   await app.register(helmet, {
     contentSecurityPolicy: {
@@ -45,7 +45,7 @@ export async function buildApp(cfg: Config, db: Db, opts: { logger?: boolean } =
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'blob:'],
         fontSrc: ["'self'", 'data:'],
-        connectSrc: ["'self'", 'ws:', 'wss:'],
+        connectSrc: ["'self'"],
         workerSrc: ["'self'"],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
@@ -63,7 +63,6 @@ export async function buildApp(cfg: Config, db: Db, opts: { logger?: boolean } =
       message: `Trop de tentatives, réessayez dans ${ctxt.after}`,
     }),
   });
-  await app.register(websocket, { options: { maxPayload: 4096 } });
 
   app.setErrorHandler((err: any, req, reply) => {
     if (err instanceof HttpError) {
@@ -116,37 +115,13 @@ export async function buildApp(cfg: Config, db: Db, opts: { logger?: boolean } =
       orderRoutes(api, ctx);
       dashboardRoutes(api, ctx);
       settingsRoutes(api, ctx);
+      hotelRoutes(api, ctx);
+      profitabilityRoutes(api, ctx);
+      backSalesRoutes(api, ctx);
       api.setNotFoundHandler((_req, reply) => reply.status(404).send({ error: 'NOT_FOUND', message: 'Route inconnue' }));
     },
     { prefix: '/api' },
   );
-
-  // WebSocket : authentification par premier message (pas de jeton dans l'URL)
-  app.get('/ws', { websocket: true }, (socket) => {
-    let authed = false;
-    const timer = setTimeout(() => {
-      if (!authed) socket.close(4401, 'auth timeout');
-    }, 5000);
-    socket.on('message', async (raw: Buffer) => {
-      if (authed) return;
-      try {
-        const msg = JSON.parse(raw.toString());
-        if (msg?.type !== 'auth' || typeof msg.token !== 'string') throw new Error('bad message');
-        const user = await auth.verifyToken(msg.token);
-        authed = true;
-        hub.add(socket, user);
-        socket.send(JSON.stringify({ type: 'ready' }));
-      } catch {
-        socket.close(4401, 'unauthorized');
-      }
-    });
-    socket.on('close', () => {
-      clearTimeout(timer);
-      hub.remove(socket);
-    });
-  });
-  hub.start();
-  app.addHook('onClose', async () => hub.stop());
 
   // Front-end (build Vite) servi par la même origine : pas de CORS, cookies/SW simples.
   if (cfg.WEB_DIST && existsSync(path.join(cfg.WEB_DIST, 'index.html'))) {
@@ -168,7 +143,7 @@ export async function buildApp(cfg: Config, db: Db, opts: { logger?: boolean } =
       },
     });
     app.setNotFoundHandler((req, reply) => {
-      if (req.method === 'GET' && !req.url.startsWith('/api') && !req.url.startsWith('/ws')) {
+      if (req.method === 'GET' && !req.url.startsWith('/api')) {
         return reply.header('Cache-Control', 'no-cache').sendFile('index.html');
       }
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Route inconnue' });

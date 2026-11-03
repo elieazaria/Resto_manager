@@ -1,45 +1,15 @@
--- Schema initial de Resto Manager (PostgreSQL / Supabase)
+-- Schéma initial de Resto Manager (PostgreSQL / Supabase)
 -- Les montants sont en Ariary (entiers, pas de décimales).
 
--- Creation securisee des types enumeres (evite les erreurs s'ils existent deja)
-DO $$ BEGIN
-    create type user_role as enum ('manager', 'cashier');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
+create type user_role as enum ('manager', 'cashier');
+create type stock_kind as enum ('ingredient', 'product');
+create type menu_kind as enum ('cooked', 'resale');
+create type order_status as enum ('open', 'paid', 'cancelled');
+create type payment_method as enum ('cash', 'mvola', 'orange_money', 'airtel_money', 'card');
+create type movement_reason as enum ('purchase', 'sale', 'void', 'adjustment');
 
-DO $$ BEGIN
-    create type stock_kind as enum ('ingredient', 'product');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
-
-DO $$ BEGIN
-    create type menu_kind as enum ('cooked', 'resale');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
-
-DO $$ BEGIN
-    create type order_status as enum ('open', 'paid', 'cancelled');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
-
-DO $$ BEGIN
-    create type payment_method as enum ('cash', 'mvola', 'orange_money', 'airtel_money', 'card');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
-
-DO $$ BEGIN
-    create type movement_reason as enum ('purchase', 'sale', 'void', 'adjustment');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
-
--- Section Utilisateurs
-create table if not exists app_users (
+-- ───────────── Utilisateurs ─────────────
+create table app_users (
   id uuid primary key default gen_random_uuid(),
   username text not null,
   full_name text not null,
@@ -54,41 +24,41 @@ create table if not exists app_users (
   constraint manager_needs_password check (role <> 'manager' or password_hash is not null),
   constraint cashier_needs_secret check (role <> 'cashier' or password_hash is not null or pin_hash is not null)
 );
-create unique index if not exists app_users_username_key on app_users (lower(username));
+create unique index app_users_username_key on app_users (lower(username));
 
--- Section Catalogue
-create table if not exists categories (
+-- ───────────── Catalogue ─────────────
+create table categories (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   sort_order integer not null default 0
 );
-create unique index if not exists categories_name_key on categories (lower(name));
+create unique index categories_name_key on categories (lower(name));
 
-create table if not exists stock_items (
+create table stock_items (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   kind stock_kind not null,
-  unit text not null default 'unité',
-  min_qty numeric(14,3) not null default 0,
-  purchase_unit text not null default 'unité',
-  purchase_factor numeric(14,4) not null default 1 check (purchase_factor > 0),
+  unit text not null default 'unité',            -- unité de stock (g, ml, pièce…)
+  min_qty numeric(14,3) not null default 0,      -- seuil d'alerte
+  purchase_unit text not null default 'unité',   -- unité d'achat (sachet, kg, boîte…)
+  purchase_factor numeric(14,4) not null default 1 check (purchase_factor > 0), -- 1 unité d'achat = N unités de stock
   is_active boolean not null default true
 );
-create unique index if not exists stock_items_name_key on stock_items (lower(name));
+create unique index stock_items_name_key on stock_items (lower(name));
 
-create table if not exists menu_items (
+create table menu_items (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   category_id uuid not null references categories(id),
-  kind menu_kind not null default 'cooked',
+  kind menu_kind not null default 'cooked',      -- cooked = recette ; resale = produit revendu tel quel
   price integer not null check (price >= 0),
-  stock_item_id uuid references stock_items(id),
+  stock_item_id uuid references stock_items(id), -- pour resale : produit décrémenté à chaque vente
   is_active boolean not null default true,
   constraint resale_needs_stock check (kind <> 'resale' or stock_item_id is not null)
 );
-create unique index if not exists menu_items_name_key on menu_items (lower(name));
+create unique index menu_items_name_key on menu_items (lower(name));
 
-create table if not exists recipes (
+create table recipes (
   id uuid primary key default gen_random_uuid(),
   menu_item_id uuid not null references menu_items(id) on delete cascade,
   stock_item_id uuid not null references stock_items(id),
@@ -96,28 +66,28 @@ create table if not exists recipes (
   unique (menu_item_id, stock_item_id)
 );
 
--- Section Achats, depenses, stock
-create table if not exists suppliers (
+-- ───────────── Achats, dépenses, stock ─────────────
+create table suppliers (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   phone text
 );
-create unique index if not exists suppliers_name_key on suppliers (lower(name));
+create unique index suppliers_name_key on suppliers (lower(name));
 
-create table if not exists purchases (
+create table purchases (
   id uuid primary key default gen_random_uuid(),
   date date not null,
   stock_item_id uuid not null references stock_items(id),
-  quantity numeric(14,3) not null check (quantity > 0),
-  unit_price integer not null check (unit_price >= 0),
+  quantity numeric(14,3) not null check (quantity > 0), -- en unité d'achat
+  unit_price integer not null check (unit_price >= 0),  -- par unité d'achat
   supplier_id uuid references suppliers(id) on delete set null,
   note text,
   created_by uuid references app_users(id),
   created_at timestamptz not null default now()
 );
-create index if not exists purchases_date_idx on purchases (date);
+create index purchases_date_idx on purchases (date);
 
-create table if not exists expenses (
+create table expenses (
   id uuid primary key default gen_random_uuid(),
   date date not null,
   label text not null,
@@ -126,9 +96,10 @@ create table if not exists expenses (
   created_by uuid references app_users(id),
   created_at timestamptz not null default now()
 );
-create index if not exists expenses_date_idx on expenses (date);
+create index expenses_date_idx on expenses (date);
 
-create table if not exists stock_movements (
+-- Journal de stock : niveau = somme des mouvements (en unité de stock)
+create table stock_movements (
   id uuid primary key default gen_random_uuid(),
   stock_item_id uuid not null references stock_items(id),
   qty numeric(14,3) not null,
@@ -138,20 +109,20 @@ create table if not exists stock_movements (
   created_by uuid references app_users(id),
   created_at timestamptz not null default now()
 );
-create index if not exists stock_movements_item_idx on stock_movements (stock_item_id);
-create index if not exists stock_movements_ref_idx on stock_movements (ref_id);
+create index stock_movements_item_idx on stock_movements (stock_item_id);
+create index stock_movements_ref_idx on stock_movements (ref_id);
 
--- Section Salle, commandes, ventes
-create table if not exists restaurant_tables (
+-- ───────────── Salle, commandes, ventes ─────────────
+create table restaurant_tables (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   sort_order integer not null default 0,
   is_active boolean not null default true
 );
-create unique index if not exists restaurant_tables_name_key on restaurant_tables (lower(name));
+create unique index restaurant_tables_name_key on restaurant_tables (lower(name));
 
-create table if not exists orders (
-  id uuid primary key default gen_random_uuid(),
+create table orders (
+  id uuid primary key default gen_random_uuid(),   -- peut être généré côté client (mode hors-ligne)
   ticket_no bigint generated by default as identity unique,
   table_id uuid not null references restaurant_tables(id),
   status order_status not null default 'open',
@@ -159,7 +130,7 @@ create table if not exists orders (
   total integer not null default 0,
   payment_method payment_method,
   amount_received integer,
-  business_date date,
+  business_date date,                              -- jour comptable (fuseau du restaurant), posé au paiement
   opened_by uuid references app_users(id),
   paid_by uuid references app_users(id),
   created_at timestamptz not null default now(),
@@ -169,33 +140,33 @@ create table if not exists orders (
   voided_by uuid references app_users(id),
   voided_at timestamptz
 );
-create unique index if not exists orders_one_open_per_table on orders (table_id) where status = 'open';
-create index if not exists orders_business_date_idx on orders (business_date) where status = 'paid';
-create index if not exists orders_status_idx on orders (status);
+create unique index orders_one_open_per_table on orders (table_id) where status = 'open';
+create index orders_business_date_idx on orders (business_date) where status = 'paid';
+create index orders_status_idx on orders (status);
 
-create table if not exists order_lines (
+create table order_lines (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references orders(id) on delete cascade,
   menu_item_id uuid not null references menu_items(id),
-  name text not null,
+  name text not null,           -- nom et prix figés au moment de la commande
   unit_price integer not null,
   quantity integer not null check (quantity > 0),
   note text
 );
-create index if not exists order_lines_order_idx on order_lines (order_id);
+create index order_lines_order_idx on order_lines (order_id);
 
--- Section Divers
-create table if not exists settings (
+-- ───────────── Divers ─────────────
+create table settings (
   key text primary key,
   value jsonb not null
 );
 
-create table if not exists cash_openings (
+create table cash_openings (
   date date primary key,
   amount integer not null default 0
 );
 
-create table if not exists audit_log (
+create table audit_log (
   id bigint generated always as identity primary key,
   at timestamptz not null default now(),
   user_id uuid references app_users(id) on delete set null,
@@ -204,4 +175,4 @@ create table if not exists audit_log (
   entity_id text,
   details jsonb
 );
-create index if not exists audit_log_at_idx on audit_log (at desc);
+create index audit_log_at_idx on audit_log (at desc);

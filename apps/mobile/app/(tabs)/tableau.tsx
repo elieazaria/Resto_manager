@@ -39,13 +39,6 @@ export default function Dashboard() {
       </View>
 
       <Card>
-        <Text style={{ fontWeight: '800', marginBottom: 6 }}>Trésorerie du jour</Text>
-        <Text>Solde initial : {money(d.cash.opening)}</Text>
-        <Text>Entrées : {money(d.cash.inflow)}   ·   Sorties : {money(d.cash.outflow)}</Text>
-        <Text style={{ fontWeight: '800', marginTop: 4 }}>Reste en caisse : {money(d.cash.remaining)}</Text>
-      </Card>
-
-      <Card>
         <Text style={{ fontWeight: '800', marginBottom: 8 }}>Ventes sur {d.series.length} jours</Text>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 90, gap: 2 }}>
           {d.series.map((s) => <View key={s.date} style={{ flex: 1, height: Math.max(2, (s.total / max) * 90), backgroundColor: C.primary, borderRadius: 2 }} />)}

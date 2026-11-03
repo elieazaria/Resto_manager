@@ -12,6 +12,8 @@ import QuickSalePage from '@/pages/pos/QuickSalePage';
 // Pages réservées au gérant : chargées à la demande (le caissier ne télécharge ni Recharts ni les écrans de gestion)
 const Dashboard = lazy(() => import('@/pages/admin/DashboardPage'));
 const StockPage = lazy(() => import('@/pages/admin/StockPage'));
+const Profitability = lazy(() => import('@/pages/admin/ProfitabilityPage'));
+const BackdatedSales = lazy(() => import('@/pages/admin/BackdatedSalesPage'));
 const SettingsPage = lazy(() => import('@/pages/admin/SettingsPage'));
 const lazyNamed = <K extends string>(k: K) => lazy(() => import('@/pages/admin/crudPages').then((m) => ({ default: (m as any)[k] as () => ReactNode })));
 const Categories = lazyNamed('CategoriesPage');
@@ -22,6 +24,16 @@ const Purchases = lazyNamed('PurchasesPage');
 const Expenses = lazyNamed('ExpensesPage');
 const Tables = lazyNamed('TablesPage');
 const Users = lazyNamed('UsersPage');
+const hotelNamed = <K extends string>(k: K) => lazy(() => import('@/pages/hotel/hotelCrud').then((m) => ({ default: (m as any)[k] as () => ReactNode })));
+const HotelPlanning = lazy(() => import('@/pages/hotel/PlanningPage'));
+const HotelDashboard = lazy(() => import('@/pages/hotel/HotelDashboardPage'));
+const HotelRooms = lazy(() => import('@/pages/hotel/RoomsPage'));
+const HotelSettings = lazy(() => import('@/pages/hotel/HotelSettingsPage'));
+const HotelClients = hotelNamed('HotelClientsPage');
+const HotelRoomsAdmin = hotelNamed('RoomsAdminPage');
+const HotelRoomTypes = hotelNamed('RoomTypesPage');
+const HotelServices = hotelNamed('HotelServicesPage');
+const HotelRates = hotelNamed('RateRulesPage');
 
 function Guard({ perm, children }: { perm: Permission; children: ReactNode }) {
   const { user, ready } = useAuth();
@@ -60,6 +72,7 @@ export default function App() {
           <Route path="/orders" element={<Guard perm="orders:read"><OrdersPage mode="today" /></Guard>} />
           <Route path="/dashboard" element={admin(<Dashboard />)} />
           <Route path="/sales" element={admin(<OrdersPage mode="sales" />)} />
+          <Route path="/sales/backdated" element={admin(<BackdatedSales />)} />
           <Route path="/menu" element={admin(<Menu />)} />
           <Route path="/categories" element={admin(<Categories />)} />
           <Route path="/stock" element={admin(<StockPage />)} />
@@ -69,6 +82,16 @@ export default function App() {
           <Route path="/expenses" element={admin(<Expenses />)} />
           <Route path="/tables" element={admin(<Tables />)} />
           <Route path="/users" element={admin(<Users />)} />
+          <Route path="/hotel/planning" element={admin(<HotelPlanning />)} />
+          <Route path="/hotel/dashboard" element={admin(<HotelDashboard />)} />
+          <Route path="/hotel/rooms" element={admin(<HotelRooms />)} />
+          <Route path="/hotel/clients" element={admin(<HotelClients />)} />
+          <Route path="/hotel/rooms-admin" element={admin(<HotelRoomsAdmin />)} />
+          <Route path="/hotel/room-types" element={admin(<HotelRoomTypes />)} />
+          <Route path="/hotel/services" element={admin(<HotelServices />)} />
+          <Route path="/hotel/rates" element={admin(<HotelRates />)} />
+          <Route path="/hotel/settings" element={admin(<HotelSettings />)} />
+          <Route path="/profitability" element={admin(<Profitability />)} />
           <Route path="/settings" element={admin(<SettingsPage />)} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

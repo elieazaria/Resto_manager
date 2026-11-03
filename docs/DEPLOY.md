@@ -12,7 +12,7 @@
 
 ## 2. Hébergement de l'application (une image Docker)
 
-Le WebSocket exige un processus **toujours actif** : évitez les plateformes « serverless ».
+L'application n'utilise plus de WebSocket : elle fonctionne aussi bien sur un serveur toujours actif que sur du serverless.
 
 ### Fly.io (exemple)
 ```bash
@@ -22,7 +22,7 @@ fly secrets set DATABASE_URL='postgresql://postgres.<ref>:<mdp>@aws-0-<region>.p
   BOOTSTRAP_ADMIN_USERNAME=admin BOOTSTRAP_ADMIN_PASSWORD='un-mot-de-passe-long'
 fly deploy
 ```
-Gardez au moins une machine allumée (`min_machines_running = 1`, `auto_stop_machines = "off"`) sinon les WebSocket et le premier chargement subissent un démarrage à froid.
+Gardez au moins une machine allumée (`min_machines_running = 1`, `auto_stop_machines = "off"`) sinon le premier chargement subit un démarrage à froid.
 
 ### Render / Railway
 Service web Docker pointant sur le `Dockerfile`, port 3000, santé `/healthz`, mêmes variables d'environnement.
@@ -46,4 +46,12 @@ Caddy obtient le certificat HTTPS automatiquement (le domaine doit pointer sur l
 Voir `.env.example` (toutes commentées). Indispensables : `DATABASE_URL`, `DATABASE_SSL`, `JWT_SECRET` (≥ 32 caractères). Recommandées : `PIN_PEPPER`, `TRUST_PROXY=true` derrière un proxy.
 
 ## Front hébergé séparément (optionnel)
-Compilez avec `VITE_API_URL=https://api.exemple.mg` et déclarez l'origine du front dans `CORS_ORIGINS` côté API. Le déploiement en une seule origine reste le plus simple (pas de CORS, service worker et WebSocket sans configuration).
+Compilez avec `VITE_API_URL=https://api.exemple.mg` et déclarez l'origine du front dans `CORS_ORIGINS` côté API. Le déploiement en une seule origine reste le plus simple (pas de CORS, service worker sans configuration).
+
+## Vercel (Container Runtime, service unique)
+
+`vercel.json` déclare un seul service `app` construit depuis `Dockerfile.vercel` (API Fastify + front servis ensemble, même origine). Variables à définir dans le projet Vercel : `DATABASE_URL` (Supabase, **Transaction pooler**, port 6543), `DATABASE_SSL=require`, `DATABASE_POOL_MAX=3`, `JWT_SECRET`, `APP_TZ`, `BOOTSTRAP_ADMIN_USERNAME`/`BOOTSTRAP_ADMIN_PASSWORD` (premier démarrage), `TRUST_PROXY=true`. Pas de WebSocket : l'actualisation se fait par sondage toutes les 8 s.
+
+## Render (recommandé pour démarrer)
+
+Voir `render.yaml` (blueprint) : service web Docker, `healthCheckPath: /healthz`, `PORT` est fourni par Render. Importer l'Excel depuis votre PC avec `DATABASE_URL` de Supabase dans `.env`.

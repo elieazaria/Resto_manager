@@ -8,7 +8,7 @@ import { fmtDateTime } from '@/lib/format';
 import { useSettings } from '@/lib/hooks';
 import { outbox, useOutbox } from '@/lib/outbox';
 import { getPrefs, printTicket, setPrefs, type PrintMode } from '@/lib/print';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 
 export default function Reglages() {
   const { user, logout } = useAuth();
@@ -39,13 +39,13 @@ export default function Reglages() {
       <Card style={{ gap: 10 }}>
         <Text style={{ fontWeight: '800' }}>Impression des tickets</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
-          <Chip label="RawBT (thermique)" active={prefs.mode === 'rawbt'} onPress={() => update({ mode: 'rawbt' as PrintMode })} />
-          <Chip label="Impression Android" active={prefs.mode === 'system'} onPress={() => update({ mode: 'system' as PrintMode })} />
+          {Platform.OS === 'android' && <Chip label="RawBT (thermique)" active={prefs.mode === 'rawbt'} onPress={() => update({ mode: 'rawbt' as PrintMode })} />}
+          <Chip label={Platform.OS === 'ios' ? 'Impression iOS (AirPrint)' : 'Impression Android'} active={prefs.mode === 'system'} onPress={() => update({ mode: 'system' as PrintMode })} />
         </View>
         <Text style={{ color: C.muted }}>
           {prefs.mode === 'rawbt'
             ? "Imprimante thermique Bluetooth/USB via l'application gratuite RawBT (Play Store) : impression directe, sans fenêtre."
-            : "Utilise le service d'impression d'Android (Wi-Fi, PDF, plugin du fabricant)."}
+            : "Utilise le service d'impression du téléphone (AirPrint sur iOS, Wi-Fi, PDF)."}
         </Text>
         <Text style={{ color: C.muted }}>Largeur du papier : {settings.paper_width} colonnes (réglée par le gérant sur le web).</Text>
         <Btn variant="outline" title="Imprimer un ticket de test" onPress={async () => { const e = await printTicket(testOrder(), settings); if (e) toast(e); }} />

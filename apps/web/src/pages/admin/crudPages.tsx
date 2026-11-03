@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { LockOpen, ListChecks } from 'lucide-react';
+import { LockOpen, ListChecks, UserX } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   EXPENSE_CATEGORIES, MENU_KIND_LABELS, MENU_KINDS, ROLE_LABELS, ROLES, STOCK_KIND_LABELS, STOCK_KINDS,
@@ -59,13 +59,17 @@ export function MenuPage() {
       {
         name: 'stock_item_id', label: 'Produit en stock', type: 'select', nullable: true, hideWhen: (v) => v.kind !== 'resale',
         optionsFrom: { endpoint: '/stock-items', label: (r) => r.name, filter: (r) => r.kind === 'product' },
-        help: 'Le stock de ce produit baisse de 1 à chaque vente.',
+        help: 'Produit dont le stock baisse à chaque vente (ex. « Jus naturel 1,5 L »).',
+      },
+      {
+        name: 'stock_qty', label: 'Quantité retirée du stock par vente', type: 'number', step: 'any', hideWhen: (v) => v.kind !== 'resale',
+        help: 'En unité de stock du produit : 1 pour une pièce, 1500 pour une bouteille de 1,5 L comptée en ml. Pour un verre vendu à part, créez un article « cuisiné » avec une recette (250 ml).',
       },
       { name: 'is_active', label: 'Proposé en caisse', type: 'checkbox' },
     ],
     schema: menuItemSchema,
-    defaults: { name: '', category_id: '', kind: 'cooked', price: 0, stock_item_id: '', is_active: true },
-    transform: (v) => ({ ...v, stock_item_id: v.kind === 'resale' ? v.stock_item_id : null }),
+    defaults: { name: '', category_id: '', kind: 'cooked', price: 0, stock_item_id: '', stock_qty: 1, is_active: true },
+    transform: (v) => ({ ...v, stock_item_id: v.kind === 'resale' ? v.stock_item_id : null, stock_qty: v.kind === 'resale' ? v.stock_qty : 1 }),
     rowActions: (row) => row.kind === 'cooked' ? (
       <Button variant="outline" size="sm" onClick={() => setRecipeFor(row)}><ListChecks /> Recette</Button>
     ) : null,
@@ -189,6 +193,11 @@ export function UsersPage() {
     onSuccess: () => { toast.success('Compte déverrouillé'); void qc.invalidateQueries({ queryKey: ['users'] }); },
     onError: (e) => toast.error(errorMessage(e)),
   });
+  const purge = useMutation({
+    mutationFn: (id: string) => api(`/users/${id}?force=true`, { method: 'DELETE' }),
+    onSuccess: () => { toast.success('Utilisateur supprimé définitivement'); void qc.invalidateQueries({ queryKey: ['users'] }); },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
   const cfg = useMemo<CrudConfig<any>>(() => ({
     title: 'Utilisateurs', singular: 'Utilisateur', endpoint: '/users', queryKey: 'users',
     description: 'Le gérant voit tout. Le caissier ne voit que la prise de commande par table, l’encaissement et l’impression.',
@@ -211,9 +220,13 @@ export function UsersPage() {
     defaults: { username: '', full_name: '', role: 'cashier', is_active: true, password: '', pin: '' },
     toForm: (r) => ({ username: r.username, full_name: r.full_name, role: r.role, is_active: r.is_active, password: '', pin: '' }),
     transform: (v) => ({ ...v, pin: v.role === 'manager' ? undefined : v.pin }),
-    rowActions: (r) => r.is_locked ? (
-      <Button variant="outline" size="sm" onClick={() => unlock.mutate(r.id)}><LockOpen /> Déverrouiller</Button>
-    ) : null,
-  }), [unlock]);
+    rowActions: (r) => (
+      <>
+        {r.is_locked && <Button variant="outline" size="sm" onClick={() => unlock.mutate(r.id)}><LockOpen /> Déverrouiller</Button>}
+        <Button variant="ghost" size="sm" className="text-destructive" title="Supprime le compte même s'il a un historique (les ventes sont conservées)"
+          onClick={() => window.confirm(`Supprimer DÉFINITIVEMENT « ${r.username} » ?\nSes ventes, achats et dépenses sont conservés mais n'indiqueront plus son nom. Action irréversible.`) && purge.mutate(r.id)}><UserX /> Supprimer définitivement</Button>
+      </>
+    ),
+  }), [unlock, purge]);
   return <CrudPage cfg={cfg} />;
 }

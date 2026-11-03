@@ -40,8 +40,6 @@ export async function saveToken(t: string | null) {
   }
 }
 
-export const wsUrl = () => `${getServerUrl().replace(/^http/, 'ws')}/ws`;
-
 export async function api<T = any>(
   path: string,
   opts: { method?: string; body?: unknown; auth?: boolean; timeoutMs?: number } = {},
