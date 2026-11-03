@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input, Label, Select } from '@/components/ui/input';
 import { PageHeader } from '@/components/PageHeader';
+import { SalesReportCard } from '@/components/SalesReportCard';
 import { api } from '@/lib/api';
 import { compactAr, fmtDate, fmtQty, money, shiftDate, todayStr } from '@/lib/format';
 import { cn, errorMessage } from '@/lib/utils';
@@ -178,6 +179,8 @@ export default function DashboardPage() {
             </table>
           </CardContent>
         </Card>
+
+        <SalesReportCard />
       </div>
     </div>
   );

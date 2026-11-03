@@ -274,6 +274,7 @@ export interface DashboardDto {
 export interface YearlyRowDto {
   month: number;
   sales: number;
+  orders: number;
   purchases: number;
   expenses: number;
   profit: number;
@@ -616,3 +617,17 @@ export const backdatedSaleSchema = z.object({
   note: z.string().trim().max(200).nullish(),
 });
 export type BackdatedSale = z.infer<typeof backdatedSaleSchema>;
+
+/** Rapport de ventes d'une période (statistiques + export PDF). */
+export interface SalesReportDto {
+  from: string;
+  to: string;
+  total: number;
+  orders: number;
+  avg_ticket: number;
+  items_sold: number;
+  by_method: { method: PaymentMethod; total: number; count: number }[];
+  by_category: { name: string; quantity: number; revenue: number }[];
+  top_items: { name: string; category_name: string | null; quantity: number; revenue: number }[];
+  series: { date: string; total: number; orders: number }[];
+}

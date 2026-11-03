@@ -5,7 +5,7 @@ import { fmtDate, money } from './format';
 import { PAY_LABEL } from './hotel';
 
 // jsPDF est chargé à la demande (≈ 300 Ko) : il n'alourdit pas le reste de l'application.
-async function doc(orientation: 'p' | 'l' = 'p') {
+export async function doc(orientation: 'p' | 'l' = 'p') {
   const [{ jsPDF }, plugin] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
   // Le plugin est un module CommonJS/UMD : selon l'outil de build la fonction est sur .default ou .default.default
   const m: any = plugin;
