@@ -4,7 +4,8 @@
 FROM node:22-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-COPY packages/shared/package.json packages/shared/
+# Copier le package.json et le code source de packages/shared en premier (car l'API en dépend)
+COPY packages/shared ./packages/shared
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 RUN npm install
@@ -15,7 +16,7 @@ FROM node:22-slim AS runtime
 ENV NODE_ENV=production PORT=3000 WEB_DIST=/app/apps/web/dist
 WORKDIR /app
 COPY package.json package-lock.json ./
-COPY packages/shared/package.json packages/shared/
+COPY packages/shared ./packages/shared
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 # dépendances d'exécution de l'API uniquement (le package partagé est embarqué dans le bundle)
