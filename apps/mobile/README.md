@@ -37,3 +37,10 @@ src/lib/        api, auth (SecureStore), outbox hors-ligne, realtime WebSocket, 
 src/components/ UI et fenêtre d'encaissement
 ```
 Les schémas Zod, droits et types viennent de `packages/shared` (config Metro dans `metro.config.js`).
+
+## iOS
+Le même code fonctionne sur iPhone/iPad, avec ces différences :
+- **Compte Apple Developer payant (99 USD/an)** obligatoire pour installer l'appli : `eas build -p ios --profile preview` (appareils enregistrés) ou `--profile production` puis TestFlight / App Store.
+- **HTTPS obligatoire** (iOS bloque le HTTP simple).
+- **Impression** : seule l'impression système (AirPrint) est disponible ; RawBT n'existe pas sur iOS. Les imprimantes thermiques Bluetooth/USB classiques ne fonctionnent pas directement : prendre une imprimante compatible AirPrint/Wi-Fi.
+- Sans compte Apple : utiliser la version web (PWA) — Safari → Partager → « Sur l'écran d'accueil ».

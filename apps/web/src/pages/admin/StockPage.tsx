@@ -10,7 +10,7 @@ import { DataTable } from '@/components/DataTable';
 import { FormDialog } from '@/components/CrudPage';
 import { PageHeader } from '@/components/PageHeader';
 import { api } from '@/lib/api';
-import { fmtDateTime, fmtQty } from '@/lib/format';
+import { fmtDateTime, fmtQty, money } from '@/lib/format';
 import { cn, errorMessage } from '@/lib/utils';
 
 interface Movement { id: string; created_at: string; qty: number; reason: string; note: string | null; stock_item_name: string; unit: string; user_name: string | null }
@@ -28,7 +28,7 @@ export default function StockPage() {
 
   const adjust = useMutation({
     mutationFn: (v: Record<string, any>) => api('/stock/adjust', { method: 'POST', body: v }),
-    onSuccess: () => { toast.success('Inventaire enregistré'); setAdjusting(null); void qc.invalidateQueries({ queryKey: ['stock'] }); void qc.invalidateQueries({ queryKey: ['dashboard'] }); },
+    onSuccess: () => { toast.success('Inventaire enregistré'); setAdjusting(null); void qc.invalidateQueries({ queryKey: ['profitability'] }); void qc.invalidateQueries({ queryKey: ['stock'] }); void qc.invalidateQueries({ queryKey: ['dashboard'] }); },
     onError: (e) => toast.error(errorMessage(e)),
   });
 
@@ -52,6 +52,8 @@ export default function StockPage() {
             { accessorKey: 'kind', header: 'Type', cell: ({ getValue }) => (getValue() === 'ingredient' ? 'Ingrédient' : 'Produit') },
             { accessorKey: 'qty', header: 'En stock', cell: ({ row: { original: r } }) => <span className={cn('num font-medium', r.qty < 0 && 'text-destructive')}>{fmtQty(r.qty)} {r.unit}</span> },
             { accessorKey: 'min_qty', header: 'Seuil', cell: ({ row: { original: r } }) => <span className="num text-muted-foreground">{fmtQty(r.min_qty)} {r.unit}</span> },
+            { accessorKey: 'purchase_cost', header: 'Prix d’achat', cell: ({ row: { original: r } }) => r.purchase_cost == null ? <span className="text-xs text-muted-foreground">à saisir</span> : <span className="num">{money(Math.round(r.purchase_cost))} <span className="text-xs text-muted-foreground">/ {r.purchase_unit}</span></span> },
+            { id: 'value', header: 'Valeur en stock', accessorFn: (r) => (r.unit_cost == null ? 0 : Math.round(Math.max(0, r.qty) * r.unit_cost)), cell: ({ row: { original: r } }) => <span className="num">{r.unit_cost == null ? '—' : money(Math.round(Math.max(0, r.qty) * r.unit_cost))}</span> },
             { accessorKey: 'low', header: 'État', cell: ({ getValue }) => (getValue() ? <Badge tone="warn">À commander</Badge> : <Badge tone="ok">OK</Badge>) },
             { id: 'a', header: '', enableSorting: false, cell: ({ row }) => <div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => setAdjusting(row.original)}><ClipboardCheck /> Inventaire</Button></div> },
           ]}
@@ -73,10 +75,14 @@ export default function StockPage() {
         <FormDialog
           open onOpenChange={(o) => !o && setAdjusting(null)} key={adjusting.id}
           title={`Inventaire : ${adjusting.name}`}
-          description={`Stock calculé : ${fmtQty(adjusting.qty)} ${adjusting.unit}. Saisissez la quantité réellement comptée.`}
-          fields={[{ name: 'counted', label: `Quantité comptée (${adjusting.unit})`, type: 'number' }, { name: 'note', label: 'Note', type: 'text', nullable: true }]}
+          description={`Stock calculé : ${fmtQty(adjusting.qty)} ${adjusting.unit}. Saisissez la quantité réellement comptée et, si vous le connaissez, le prix d'achat.`}
+          fields={[
+            { name: 'counted', label: `Quantité comptée (${adjusting.unit})`, type: 'number' },
+            { name: 'unit_cost', label: `Prix d'achat (Ar par ${adjusting.purchase_unit})`, type: 'number', step: '1', inputMode: 'numeric', help: adjusting.purchase_factor !== 1 ? `1 ${adjusting.purchase_unit} = ${fmtQty(adjusting.purchase_factor)} ${adjusting.unit}. Sert à calculer le bénéfice réel des menus tant qu'aucun achat n'est enregistré.` : "Sert à calculer le bénéfice réel des menus tant qu'aucun achat n'est enregistré." },
+            { name: 'note', label: 'Note', type: 'text', nullable: true },
+          ]}
           schema={stockAdjustSchema.omit({ stock_item_id: true })}
-          defaults={{ counted: adjusting.qty, note: '' }}
+          defaults={{ counted: adjusting.qty, unit_cost: adjusting.purchase_cost == null ? '' : Math.round(adjusting.purchase_cost), note: '' }}
           submitLabel="Enregistrer l'inventaire"
           onSubmit={async (v) => { await adjust.mutateAsync({ ...v, stock_item_id: adjusting.id }).catch(() => {}); }}
         />

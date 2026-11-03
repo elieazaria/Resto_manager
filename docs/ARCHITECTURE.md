@@ -3,14 +3,14 @@
 ```
 Téléphone / tablette / PC  ──HTTPS──►  Conteneur unique
    React PWA (service worker)          ├─ Fastify : /api/*  (REST JSON)
-   file hors-ligne (localStorage)      ├─ Fastify : /ws     (WebSocket)
+   file hors-ligne (localStorage)      
                                        └─ fichiers statiques du front (apps/web/dist)
                                                 │ SQL (pg, TLS)
                                                 ▼
                                        Supabase PostgreSQL  ──pg_dump──► stockage S3 externe
 ```
 
-Supabase n'est utilisé que comme **PostgreSQL managé**. L'authentification est la nôtre (JWT + argon2) et le temps réel passe par notre WebSocket : cela permet un PIN caissier, des rôles métier précis et aucune dépendance au SDK Supabase côté navigateur.
+Supabase n'est utilisé que comme **PostgreSQL managé**. L'authentification est la nôtre (JWT + argon2) et l'actualisation passe par un sondage périodique : cela permet un PIN caissier, des rôles métier précis et aucune dépendance au SDK Supabase côté navigateur.
 
 ## Modèle de données (migrations dans `apps/api/migrations`)
 
@@ -46,13 +46,13 @@ Préfixe `/api`. Permissions définies une fois dans `packages/shared` (`can(rol
 
 Le caissier ne reçoit que les commandes **ouvertes ou du jour**.
 
-## WebSocket
+## Actualisation
 
-`GET /ws` : le client envoie `{type:"auth", token}` dans les 5 s (jamais de jeton dans l'URL), puis reçoit `order.changed` (tous) et `stock.changed` (gérant). Les évènements ne portent aucune donnée sensible : le front rafraîchit via l'API, qui applique les droits. Ping/pong toutes les 30 s ; reconnexion automatique côté front.
+Pas de WebSocket : le front (et l'appli mobile) interroge `GET /healthz` toutes les 8 s tant qu'il est visible, rejoue la file hors-ligne puis invalide les requêtes (tables, commandes, tableau de bord, stock). Le serveur reste sans état, donc compatible avec un hébergement serverless.
 
 ## Front
 
 - Routage par permission (`Guard`) ; pages de gestion chargées à la demande (le caissier ne télécharge pas Recharts).
 - `CrudPage` : composant générique TanStack Table (tri, recherche, pagination) + formulaire React Hook Form validé par les **mêmes schémas Zod que l'API**.
-- `lib/outbox.ts` : file d'attente hors-ligne ; `lib/escpos.ts` : génération des tickets ESC/POS ; `lib/realtime.ts` : WebSocket + invalidation des requêtes.
+- `lib/outbox.ts` : file d'attente hors-ligne ; `lib/escpos.ts` : génération des tickets ESC/POS ; `lib/realtime.ts` : sondage + invalidation des requêtes.
 - Thème : vert ravenala / jaune safran, polices Bricolage Grotesque et Figtree **embarquées** (fonctionnent hors-ligne).

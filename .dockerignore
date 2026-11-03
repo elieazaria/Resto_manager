@@ -8,3 +8,4 @@ node_modules
 backups
 docs
 *.md
+apps/mobile

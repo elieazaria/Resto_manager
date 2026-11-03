@@ -5,10 +5,9 @@ import { audit } from '../auth.js';
 import type { Ctx } from '../context.js';
 import { registerCrud } from '../crud.js';
 import { notFound } from '../errors.js';
-import { STOCK_LEVELS_SQL, syncPurchaseMovement } from '../services/stock.js';
+import { STOCK_LEVELS_SQL, UNIT_COSTS_SQL, syncPurchaseMovement } from '../services/stock.js';
 
 export function stockRoutes(app: FastifyInstance, ctx: Ctx) {
-  const notifyStock = (c: Ctx) => c.hub.broadcast({ type: 'stock.changed' }, ['manager']);
   const admin = { preHandler: ctx.auth.require('admin') };
 
   registerCrud(app, ctx, {
@@ -18,7 +17,6 @@ export function stockRoutes(app: FastifyInstance, ctx: Ctx) {
     createSchema: stockItemSchema,
     updateSchema: stockItemSchema.partial(),
     orderBy: 't.kind, lower(t.name)',
-    afterCommit: notifyStock,
   });
 
   registerCrud(app, ctx, {
@@ -45,7 +43,6 @@ export function stockRoutes(app: FastifyInstance, ctx: Ctx) {
     onDeleting: async (q, id) => {
       await q.query(`delete from stock_movements where ref_id = $1 and reason = 'purchase'`, [id]);
     },
-    afterCommit: notifyStock,
   });
 
   registerCrud(app, ctx, {
@@ -60,7 +57,14 @@ export function stockRoutes(app: FastifyInstance, ctx: Ctx) {
 
   /* ── Niveaux de stock + alertes ── */
   app.get('/stock', admin, async (): Promise<StockRowDto[]> =>
-    (await ctx.db.query<StockRowDto>(`${STOCK_LEVELS_SQL} order by low desc, s.kind, lower(s.name)`)).rows,
+    (await ctx.db.query<StockRowDto>(
+      `select l.id, l.name, l.kind, l.unit, l.min_qty, l.qty, l.low, si.purchase_unit, si.purchase_factor::float8 as purchase_factor,
+              c.avg_cost as unit_cost, (c.avg_cost * si.purchase_factor)::float8 as purchase_cost
+       from (${STOCK_LEVELS_SQL}) l
+       join stock_items si on si.id = l.id
+       left join (${UNIT_COSTS_SQL}) c on c.stock_item_id = l.id
+       order by l.low desc, l.kind, lower(l.name)`,
+    )).rows,
   );
 
   /** Inventaire : on saisit la quantité comptée, l'API enregistre l'écart comme mouvement « adjustment ». */
@@ -80,9 +84,12 @@ export function stockRoutes(app: FastifyInstance, ctx: Ctx) {
         );
         await audit(q, req.user, 'stock.adjust', 'stock_item', b.stock_item_id, { from: cur, to: b.counted });
       }
+      if (b.unit_cost != null) {
+        await q.query('update stock_items set cost_ref = $2, cost_ref_date = current_date where id = $1', [b.stock_item_id, b.unit_cost]);
+        await audit(q, req.user, 'stock.cost_ref', 'stock_item', b.stock_item_id, { unit_cost: b.unit_cost });
+      }
       return { stock_item_id: b.stock_item_id, previous: cur, counted: b.counted, delta };
     });
-    notifyStock(ctx);
     return result;
   });
 

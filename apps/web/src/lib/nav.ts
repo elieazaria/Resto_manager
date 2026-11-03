@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, Boxes, ClipboardList, Receipt, Settings, ShoppingBasket, Store, Tags, Truck, Users, UtensilsCrossed, Wallet, Grid2x2, ShoppingCart, type LucideIcon } from 'lucide-react';
+import { BarChart3, History, TrendingUp, BedDouble, CalendarRange, Hotel, KeyRound, Layers, Percent, Settings2, ConciergeBell, UserRound, BookOpen, Boxes, ClipboardList, Receipt, Settings, ShoppingBasket, Store, Tags, Truck, Users, UtensilsCrossed, Wallet, Grid2x2, ShoppingCart, type LucideIcon } from 'lucide-react';
 import type { Permission } from '@resto/shared';
 
 export interface NavItem {
@@ -15,13 +15,24 @@ export const NAV: NavItem[] = [
   { to: '/pos/vente', label: 'Nouvelle vente', icon: ShoppingCart, perm: 'pos' },
   { to: '/orders', label: 'Commandes du jour', icon: ClipboardList, perm: 'orders:read' },
   { to: '/sales', label: 'Ventes', icon: Receipt, perm: 'admin', group: 'Gestion' },
+  { to: '/sales/backdated', label: 'Ventes antérieures', icon: History, perm: 'admin', group: 'Gestion' },
   { to: '/menu', label: 'Menu et recettes', icon: UtensilsCrossed, perm: 'admin', group: 'Gestion' },
   { to: '/categories', label: 'Catégories', icon: Tags, perm: 'admin', group: 'Gestion' },
   { to: '/stock', label: 'Niveaux de stock', icon: Boxes, perm: 'admin', group: 'Stock' },
   { to: '/stock-items', label: 'Ingrédients et produits', icon: BookOpen, perm: 'admin', group: 'Stock' },
   { to: '/purchases', label: 'Achats', icon: ShoppingBasket, perm: 'admin', group: 'Stock' },
   { to: '/suppliers', label: 'Fournisseurs', icon: Truck, perm: 'admin', group: 'Stock' },
+  { to: '/profitability', label: 'Rentabilité des menus', icon: TrendingUp, perm: 'admin', group: 'Finances' },
   { to: '/expenses', label: 'Dépenses et charges', icon: Wallet, perm: 'admin', group: 'Finances' },
+  { to: '/hotel/planning', label: 'Planning', icon: CalendarRange, perm: 'admin', group: 'Hôtel' },
+  { to: '/hotel/dashboard', label: 'Tableau de bord hôtel', icon: Hotel, perm: 'admin', group: 'Hôtel' },
+  { to: '/hotel/rooms', label: 'Chambres en direct', icon: KeyRound, perm: 'admin', group: 'Hôtel' },
+  { to: '/hotel/clients', label: 'Clients et comptes', icon: UserRound, perm: 'admin', group: 'Hôtel' },
+  { to: '/hotel/rooms-admin', label: 'Chambres (gestion)', icon: BedDouble, perm: 'admin', group: 'Hôtel' },
+  { to: '/hotel/room-types', label: 'Types de chambres', icon: Layers, perm: 'admin', group: 'Hôtel' },
+  { to: '/hotel/services', label: 'Suppléments', icon: ConciergeBell, perm: 'admin', group: 'Hôtel' },
+  { to: '/hotel/rates', label: 'Tarifs dynamiques', icon: Percent, perm: 'admin', group: 'Hôtel' },
+  { to: '/hotel/settings', label: 'Réglages hôtel et démo', icon: Settings2, perm: 'admin', group: 'Hôtel' },
   { to: '/tables', label: 'Tables de la salle', icon: Grid2x2, perm: 'admin', group: 'Réglages' },
   { to: '/users', label: 'Utilisateurs', icon: Users, perm: 'admin', group: 'Réglages' },
   { to: '/settings', label: 'Restaurant et ticket', icon: Settings, perm: 'admin', group: 'Réglages' },

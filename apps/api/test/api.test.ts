@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import WebSocket from 'ws';
 import { makeTestApp } from './helpers.js';
 
 type T = Awaited<ReturnType<typeof makeTestApp>>;
@@ -289,12 +288,11 @@ describe('stock, inventaire, tableau de bord', () => {
     expect(await stockQty(ids.riz)).toBe(before - 5000);
   });
 
-  it('tableau de bord : CA, achats, dépenses, bénéfice, trésorerie', async () => {
+  it('tableau de bord : CA, achats, dépenses, bénéfice', async () => {
     const sale = randomUUID();
     await t.call('PUT', `/api/orders/${sale}`, { token: cashier, body: { table_id: ids.t2, lines: [{ menu_item_id: ids.plat, quantity: 1 }] } });
     await t.call('POST', `/api/orders/${sale}/pay`, { token: cashier, body: { method: 'mvola' } });
     await t.call('POST', '/api/expenses', { token: admin, body: { date: today(), label: 'Gaz', category: 'Cuisson', amount: 7000 } });
-    await t.call('PUT', '/api/dashboard/opening-balance', { token: admin, body: { date: today(), amount: 50000 } });
     const d = (await t.call('GET', '/api/dashboard', { token: admin })).json;
     // ventes du jour : une vente mvola de 12000 (la vente de 30000 a été annulée, celle d'hier est hors du jour)
     expect(d.kpis.sales_day).toBe(12000);
@@ -302,7 +300,7 @@ describe('stock, inventaire, tableau de bord', () => {
     expect(d.kpis.purchases_day).toBe(20000); // achat riz supprimé : reste 10 × 2000 de coca
     expect(d.kpis.expenses_day).toBe(7000);
     expect(d.kpis.profit_day).toBe(12000 - 20000 - 7000);
-    expect(d.cash).toEqual({ opening: 50000, inflow: 12000, outflow: 27000, remaining: 35000 });
+    expect(d.cash).toBeUndefined();
     expect(d.series).toHaveLength(30);
     expect(d.series.at(-1).total).toBe(12000);
     expect(d.by_method[0].method).toBe('mvola');
@@ -324,41 +322,34 @@ describe('stock, inventaire, tableau de bord', () => {
   });
 });
 
-describe('WebSocket temps réel', () => {
-  it('exige une authentification puis diffuse les évènements de commande', async () => {
-    await t.app.listen({ port: 0, host: '127.0.0.1' });
-    const port = (t.app.server.address() as any).port;
+describe('ventes antérieures et suppression définitive', () => {
+  it('une vente datée du passé apparaît à sa date et décrémente le stock', async () => {
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Indian/Antananarivo' }).format(new Date(Date.now() - 5 * 86_400_000));
+    const before = await stockQty(ids.coca);
+    const r = await t.call('POST', '/api/sales/backdated', { token: admin, body: { date: day, payment_method: 'cash', lines: [{ menu_item_id: ids.cocaMenu, quantity: 2 }] } });
+    expect(r.status).toBe(201);
+    expect(r.json.total).toBe(6000);
+    expect(r.json.business_date).toBe(day);
+    expect(await stockQty(ids.coca)).toBe(before - 2);
+    const future = await t.call('POST', '/api/sales/backdated', { token: admin, body: { date: '2999-01-01', payment_method: 'cash', lines: [{ menu_item_id: ids.cocaMenu, quantity: 1 }] } });
+    expect(future.status).toBe(400);
+    expect((await t.call('POST', '/api/sales/backdated', { token: cashier, body: {} })).status).toBe(403);
+    // sans mise à jour du stock
+    const q2 = await stockQty(ids.coca);
+    await t.call('POST', '/api/sales/backdated', { token: admin, body: { date: day, payment_method: 'mvola', update_stock: false, lines: [{ menu_item_id: ids.cocaMenu, quantity: 1 }] } });
+    expect(await stockQty(ids.coca)).toBe(q2);
+  });
 
-    // 1) mauvais jeton => fermeture 4401
-    const bad = new WebSocket(`ws://127.0.0.1:${port}/ws`);
-    const closed = await new Promise<number>((res) => {
-      bad.on('open', () => bad.send(JSON.stringify({ type: 'auth', token: 'nope' })));
-      bad.on('close', (code) => res(code));
-    });
-    expect(closed).toBe(4401);
-
-    // 2) bon jeton => ready, puis évènement
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
-    const messages: any[] = [];
-    ws.on('message', (m) => messages.push(JSON.parse(m.toString())));
-    await new Promise<void>((res) => ws.on('open', () => { ws.send(JSON.stringify({ type: 'auth', token: cashier })); res(); }));
-    await vi_waitFor(() => messages.some((m) => m.type === 'ready'));
-
-    const id = randomUUID();
-    await t.call('PUT', `/api/orders/${id}`, { token: cashier, body: { table_id: ids.t1, lines: [{ menu_item_id: ids.plat, quantity: 1 }] } });
-    await vi_waitFor(() => messages.some((m) => m.type === 'order.changed' && m.order_id === id));
-    // le caissier ne reçoit pas les évènements de stock (réservés au gérant)
-    await t.call('POST', `/api/orders/${id}/pay`, { token: cashier, body: { method: 'cash' } });
-    await vi_waitFor(() => messages.some((m) => m.type === 'order.changed' && m.status === 'paid'));
-    expect(messages.some((m) => m.type === 'stock.changed')).toBe(false);
-    ws.close();
+  it('suppression définitive d’un utilisateur ayant un historique', async () => {
+    const u = (await t.call('POST', '/api/users', { token: admin, body: { username: 'temp', full_name: 'Temp', role: 'cashier', pin: '9999' } })).json;
+    const tok = (await t.call('POST', '/api/auth/pin-login', { body: { username: 'temp', pin: '9999' } })).json.token;
+    const oid = randomUUID();
+    await t.call('PUT', `/api/orders/${oid}`, { token: tok, body: { table_id: ids.t1, lines: [{ menu_item_id: ids.cocaMenu, quantity: 1 }] } });
+    await t.call('POST', `/api/orders/${oid}/pay`, { token: tok, body: { method: 'cash' } });
+    const plain = await t.call('DELETE', `/api/users/${u.id}`, { token: admin });
+    expect(plain.status).toBe(409);
+    expect((await t.call('DELETE', `/api/users/${u.id}?force=true`, { token: admin })).status).toBe(204);
+    expect((await t.call('GET', '/api/users', { token: admin })).json.some((x: any) => x.username === 'temp')).toBe(false);
+    expect((await t.call('GET', `/api/orders/${oid}`, { token: admin })).status).toBe(200); // vente conservée
   });
 });
-
-async function vi_waitFor(cond: () => boolean, ms = 3000) {
-  const start = Date.now();
-  while (!cond()) {
-    if (Date.now() - start > ms) throw new Error('timeout en attente du message WebSocket');
-    await new Promise((r) => setTimeout(r, 25));
-  }
-}

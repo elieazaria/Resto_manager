@@ -9,6 +9,18 @@ export const STOCK_LEVELS_SQL = `
   where s.is_active
   group by s.id`;
 
+/** Coût d'achat par UNITE DE STOCK de chaque article : moyenne pondérée des achats ou dernier prix ; le prix saisi à l'inventaire sert de repli (ou prime s'il est plus récent pour « dernier prix »). */
+export const UNIT_COSTS_SQL = `
+  select s.id as stock_item_id,
+    coalesce(
+      (select sum(p.quantity * p.unit_price) / nullif(sum(p.quantity * s.purchase_factor), 0) from purchases p where p.stock_item_id = s.id),
+      s.cost_ref / s.purchase_factor)::float8 as avg_cost,
+    coalesce(
+      case when s.cost_ref is not null and (lp.date is null or coalesce(s.cost_ref_date, current_date) >= lp.date) then s.cost_ref / s.purchase_factor end,
+      lp.unit_price::numeric / s.purchase_factor)::float8 as last_cost
+  from stock_items s
+  left join lateral (select p.date, p.unit_price from purchases p where p.stock_item_id = s.id order by p.date desc, p.created_at desc limit 1) lp on true`;
+
 /** Le mouvement de stock d'un achat = quantité achetée × facteur de conversion (unité d'achat -> unité de stock). */
 export async function syncPurchaseMovement(q: Queryable, purchaseId: string, userId: string | null) {
   await q.query(`delete from stock_movements where ref_id = $1 and reason = 'purchase'`, [purchaseId]);

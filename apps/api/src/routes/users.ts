@@ -89,13 +89,21 @@ export function userRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.delete('/users/:id', guard, async (req, reply) => {
     const id = idParam(req);
+    const force = (req.query as { force?: string }).force === 'true';
     if (id === req.user.id) throw badRequest('Vous ne pouvez pas supprimer votre propre compte');
     await ctx.db.tx(async (q) => {
       const cur = (await q.query<{ role: string }>('select role from app_users where id = $1 for update', [id])).rows[0];
       if (!cur) throw notFound();
       if (cur.role === 'manager') await assertAnotherManager(q, id);
-      await q.query('delete from app_users where id = $1', [id]); // FK violée si des commandes existent => 409, désactiver à la place
-      await audit(q, req.user, 'user.delete', 'user', id);
+      if (force) {
+        // Suppression définitive : on détache l'utilisateur de son historique (ventes, achats, dépenses, stock),
+        // qui est conservé mais n'indique plus qui l'a saisi.
+        for (const [table, col] of [['orders', 'opened_by'], ['orders', 'paid_by'], ['orders', 'voided_by'], ['purchases', 'created_by'], ['expenses', 'created_by'], ['stock_movements', 'created_by']] as const) {
+          await q.query(`update ${table} set ${col} = null where ${col} = $1`, [id]);
+        }
+      }
+      await q.query('delete from app_users where id = $1', [id]); // sans force : FK violée si historique => 409, désactiver à la place
+      await audit(q, req.user, force ? 'user.delete_permanent' : 'user.delete', 'user', id);
     });
     return reply.status(204).send();
   });

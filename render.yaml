@@ -1,0 +1,25 @@
+# Blueprint Render : New + → Blueprint → choisir le dépôt. Les valeurs « sync: false » sont saisies dans le tableau de bord.
+services:
+  - type: web
+    name: resto-manager
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter            # « free » s'endort après 15 min d'inactivité : à éviter pour une caisse
+    region: frankfurt        # idéalement la même région que la base Supabase
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL    # Supabase → Connect → « Session pooler »
+        sync: false
+      - key: DATABASE_SSL
+        value: require
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_TZ
+        value: Indian/Antananarivo
+      - key: TRUST_PROXY
+        value: "true"
+      - key: BOOTSTRAP_ADMIN_USERNAME
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false

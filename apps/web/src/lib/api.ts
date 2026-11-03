@@ -1,5 +1,5 @@
 export const TOKEN_KEY = 'resto.token';
-const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
+export const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
 
 export class ApiError extends Error {
   constructor(
@@ -29,11 +29,6 @@ export const getToken = () => {
   } catch {
     return null;
   }
-};
-
-export const wsUrl = () => {
-  const base = BASE || window.location.origin;
-  return `${base.replace(/^http/, 'ws')}/ws`;
 };
 
 export async function api<T = any>(

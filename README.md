@@ -15,9 +15,9 @@ Application web de gestion de restaurant (caisse, stock, achats, dépenses, tabl
 | PWA | vite-plugin-pwa (service worker Workbox) + file d'attente hors-ligne des commandes |
 | API | Node 22 + Fastify 5 (TypeScript), validation Zod partagée avec le front |
 | Authentification | JWT (jose) + mots de passe **argon2id**, **PIN rapide** pour le caissier (HMAC + argon2id, verrouillage après 5 échecs), RBAC côté serveur |
-| Temps réel | WebSocket (`@fastify/websocket`) : une commande saisie en salle apparaît aussitôt en caisse |
+| Actualisation | Sans WebSocket : sondage léger toutes les 8 s (compatible Vercel, Render, tout hébergeur) |
 | Base de données | PostgreSQL, hébergée sur **Supabase** (ou n'importe quel Postgres) |
-| Sauvegardes | `pg_dump` quotidien (GitHub Actions) vers un stockage S3 externe, rotation, restauration scriptée |
+| Sauvegardes | script `pg_dump` manuel (`scripts/backup`) vers un stockage S3 externe, rotation, restauration scriptée — aucune exécution automatique |
 
 ```
 apps/web         front React (PWA)
@@ -36,7 +36,7 @@ Prérequis : Node 22+, et soit Docker, soit un projet Supabase.
 npm install
 cp .env.example .env          # puis éditer JWT_SECRET (openssl rand -base64 48)
 docker compose up -d db       # Postgres local  (ou mettre l'URL Supabase dans DATABASE_URL)
-npm run dev                   # API :3000 + front :5173 (proxy /api et /ws)
+npm run dev                   # API :3000 + front :5173 (proxy /api)
 ```
 
 Ouvrez http://localhost:5173 et connectez-vous avec `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD` (créé automatiquement au premier démarrage s'il n'existe aucun gérant ; retirez ces variables ensuite).
@@ -85,7 +85,7 @@ docker compose --profile https up -d  # + HTTPS automatique (DOMAIN=resto.exempl
 
 ## Sauvegardes
 
-`scripts/backup/backup.sh` fait un `pg_dump` (format custom compressé), vérifie qu'il est relisible, le chiffre en option (age), l'envoie vers S3/R2/B2 et applique la rotation (30 jours, 5 dernières toujours gardées). Le workflow `.github/workflows/backup.yml` le lance chaque nuit à minuit (heure d'Antananarivo). Procédure complète et test de restauration : [docs/BACKUP.md](docs/BACKUP.md).
+`scripts/backup/backup.sh` fait un `pg_dump` (format custom compressé), vérifie qu'il est relisible, le chiffre en option (age), l'envoie vers S3/R2/B2 et applique la rotation (30 jours, 5 dernières toujours gardées). Il se lance à la main (le workflow GitHub Actions quotidien a été retiré). Procédure complète et test de restauration : [docs/BACKUP.md](docs/BACKUP.md).
 
 ## Sécurité (résumé)
 
@@ -94,7 +94,7 @@ docker compose --profile https up -d  # + HTTPS automatique (DOMAIN=resto.exempl
 - Désactiver un compte ou changer son mot de passe/PIN **révoque immédiatement** ses sessions ouvertes.
 - Prix recalculés côté serveur (le client ne peut pas en imposer) ; paiement et commandes **idempotents**.
 - Supabase : **RLS activé sans policy** sur toutes les tables et droits `anon`/`authenticated` retirés (migration 002) : la clé publique Supabase ne donne accès à rien. Seule l'API, avec le rôle `postgres`, lit la base.
-- CSP stricte (Helmet), jetons jamais dans les URL (WebSocket authentifié par premier message).
+- CSP stricte (Helmet), jetons jamais dans les URL.
 - Le jeton de session est conservé dans le `localStorage` de l'appareil (durée `JWT_TTL`, 12 h par défaut) ; la CSP limite le risque XSS.
 
 ## Tests
@@ -105,7 +105,7 @@ npm test                                   # API sur PGlite (Postgres WASM) + fr
 TEST_DATABASE_URL=postgres://…/resto_test npm test   # API sur un vrai Postgres (base dont le nom contient « test »)
 ```
 
-33 tests d'intégration API (authentification, verrouillage PIN, révocation, RBAC, commandes idempotentes, décrément de stock, annulation, tableau de bord, WebSocket) et des tests de la génération ESC/POS.
+32 tests d'intégration API (authentification, verrouillage PIN, révocation, RBAC, commandes idempotentes, décrément de stock, annulation, tableau de bord) et des tests de la génération ESC/POS.
 
 ## À savoir / pistes d'évolution
 
@@ -113,3 +113,39 @@ TEST_DATABASE_URL=postgres://…/resto_test npm test   # API sur un vrai Postgre
 - `npm audit` signale 2 alertes modérées héritées de `exceljs` (dépendance `uuid`, utilisée seulement par la commande d’import Excel, hors serveur web) ; sans effet pratique ici.
 - Paiements Mobile Money : le mode de paiement est enregistré, sans intégration API des opérateurs.
 - Idées suivantes : marge par plat (coût de recette), tickets cuisine/bar par poste, impression directe Web Bluetooth/WebUSB, export Excel/PDF des rapports, prévisions de ventes (Python/pandas).
+
+
+## Module Hôtel (version web)
+
+Menu **Hôtel** (gérant uniquement) :
+
+| Écran | Rôle |
+|---|---|
+| Planning | Gantt chambres × jours par catégorie, barres colorées par statut, puces (arrivées/départs du jour, confirmée, en option, annulées), « Vue planning liste » (périodes, export CSV et PDF), réservation simple ou groupée, export PDF du planning |
+| Chambres en direct | Statut calculé en temps réel (disponible, réservée, arrivée du jour, occupée, ménage, maintenance, hors service), check-in / check-out |
+| Réservation | Prix par nuit issu des tarifs dynamiques (modifiable), suppléments avec quantités (matelas, location cuisine…), remise % ou Ar, acompte, paiements (espèces, Mvola, Orange Money, Airtel Money, chèque, virement, autre), remboursements, facture PDF |
+| Clients et comptes | Fiches clients, solde, relevé de compte PDF |
+| Chambres (gestion), Types, Suppléments, Tarifs dynamiques | Paramétrage |
+| Réglages hôtel et démo | Nom/adresse/NIF, préfixe `RES HM-01/yy.nnnnnn`, heures, taxe de séjour, TVA, pied de facture ; **Mettre à jour les valeurs démo** recrée des réservations d'essai autour d'aujourd'hui, **Effacer la démo** les supprime (seules les lignes `is_demo` sont touchées) |
+
+API : `/api/hotel/*` (migration `003_hotel.sql`, RLS activée). Tests : `apps/api/test/hotel.test.ts`.
+
+## Rentabilité des menus
+
+Restaurant › Finances › **Rentabilité des menus** : pour chaque plat, boisson ou produit revendu, prix de vente − coût matières (ingrédients de la recette × prix d'achat enregistrés, en coût moyen pondéré ou dernier prix), marge en %, quantités vendues et bénéfice réalisé sur la période, avec le détail des ingrédients et un export CSV. API : `GET /api/profitability?from&to&basis=average|last`.
+
+## Ventes antérieures, suppression d'utilisateur, tableau de bord
+
+- **Gestion › Ventes antérieures** : saisie d'une vente passée (date au choix, plats déroulants, quantités, mode de paiement, mise à jour facultative du stock au jour de la vente). API : `POST /api/sales/backdated` (gérant).
+- **Réglages › Utilisateurs › Supprimer définitivement** : supprime le compte même avec un historique ; ses ventes, achats et dépenses sont conservés mais détachés de son nom (`DELETE /api/users/:id?force=true`). La corbeille classique reste prudente (refuse si historique). Le dernier gérant et votre propre compte ne peuvent pas être supprimés.
+- Le bloc « Trésorerie du jour » (solde initial / reste en caisse) a été retiré du tableau de bord web et mobile ; la route `PUT /api/dashboard/opening-balance` n'existe plus.
+
+## Prix d'achat à l'inventaire, recherche en vente, verre de jus
+
+- **Niveaux de stock › Inventaire** : en plus de la quantité comptée, on saisit le **prix d'achat** (par unité d'achat : bouteille, kg…). Il est mémorisé (`stock_items.cost_ref`) et sert au calcul de rentabilité tant qu'aucun achat n'est enregistré (ou s'il est plus récent que le dernier achat pour « dernier prix »). Ensuite, le coût = moyenne pondérée des achats. Le tableau des niveaux affiche le prix d'achat et la valeur en stock.
+- **Nouvelle vente** : barre de recherche (sans accents ni majuscules) ; un clic sur un résultat l'ajoute ou augmente sa quantité.
+- **Produit composé (verre de jus)** : une recette peut maintenant utiliser n'importe quel article de stock, ingrédient ou produit. Exemple :
+  1. Stock « Jus naturel 1,5 L » : unité **ml**, unité d'achat **bouteille**, facteur **1500**.
+  2. Article de menu « Verre de jus » (type cuisiné, 2 000 Ar) avec la recette **250 ml** de « Jus naturel 1,5 L » (= 0,167 bouteille, affiché dans la recette).
+  3. Article « Jus naturel 1,5 L » (type revendu, 9 000 Ar) avec **Quantité retirée du stock par vente = 1500**.
+  6 verres retirent exactement 1 500 ml, soit 1 bouteille, sans erreur d'arrondi (c'est pourquoi le stock se compte en ml). Migration `004_stock_cost_portions.sql`.

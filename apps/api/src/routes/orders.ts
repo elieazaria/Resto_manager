@@ -15,11 +15,6 @@ const listQuery = z.object({
 });
 
 export function orderRoutes(app: FastifyInstance, ctx: Ctx) {
-  const notify = (o: OrderDto) => {
-    ctx.hub.broadcast({ type: 'order.changed', order_id: o.id, table_id: o.table_id, status: o.status });
-    if (o.status !== 'open') ctx.hub.broadcast({ type: 'stock.changed' }, ['manager']);
-  };
-
   /** Le caissier ne voit que les commandes ouvertes et celles du jour ; le gérant tout l'historique. */
   const today = () => todayInTz(ctx.cfg.APP_TZ);
   const assertVisible = (user: { role: 'manager' | 'cashier' }, o: OrderDto) => {
@@ -47,7 +42,6 @@ export function orderRoutes(app: FastifyInstance, ctx: Ctx) {
     const id = idParam(req);
     const body = orderPutSchema.parse(req.body);
     const order = await ctx.db.tx((q) => putOrder(q, req.user, id, body));
-    notify(order);
     return order;
   });
 
@@ -55,13 +49,11 @@ export function orderRoutes(app: FastifyInstance, ctx: Ctx) {
     const id = idParam(req);
     const body = payOrderSchema.parse(req.body);
     const { order, changed } = await ctx.db.tx((q) => payOrder(q, req.user, id, body, ctx.cfg.APP_TZ));
-    if (changed) notify(order);
     return order;
   });
 
   app.post('/orders/:id/cancel', { preHandler: ctx.auth.require('orders:write') }, async (req) => {
     const order = await ctx.db.tx((q) => cancelOpenOrder(q, req.user, idParam(req)));
-    notify(order);
     return order;
   });
 
@@ -70,7 +62,6 @@ export function orderRoutes(app: FastifyInstance, ctx: Ctx) {
     if (!can(req.user.role, 'orders:void')) throw new HttpError(403, 'FORBIDDEN', 'Accès refusé');
     const { reason } = voidOrderSchema.parse(req.body);
     const order = await ctx.db.tx((q) => voidPaidOrder(q, req.user, idParam(req), reason));
-    notify(order);
     return order;
   });
 }

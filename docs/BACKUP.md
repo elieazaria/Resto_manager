@@ -1,7 +1,9 @@
 # Sauvegardes et restauration
 
 ## Principe
-Chaque nuit à **minuit (Antananarivo)**, GitHub Actions exécute `scripts/backup/backup.sh` :
+> ℹ️ Le workflow GitHub Actions quotidien a été **supprimé** : la sauvegarde ne s'exécute plus automatiquement. Lancez `scripts/backup/backup.sh` à la main (ou depuis un cron de votre serveur : `0 21 * * * /chemin/scripts/backup/backup.sh`). Les sections ci-dessous qui parlent d'Actions ne s'appliquent plus.
+
+`scripts/backup/backup.sh` fait :
 
 1. `pg_dump` format *custom* compressé, schéma `public` uniquement (sans propriétaire ni privilèges Supabase) ;
 2. contrôle : `pg_restore --list` doit relire le dump, taille minimale ;

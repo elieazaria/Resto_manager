@@ -164,7 +164,7 @@ export async function payOrder(
        from order_lines l join recipes r on r.menu_item_id = l.menu_item_id
        where l.order_id = $1
        union all
-       select m.stock_item_id, l.quantity::numeric as qty
+       select m.stock_item_id, l.quantity * m.stock_qty as qty
        from order_lines l join menu_items m on m.id = l.menu_item_id
        where l.order_id = $1 and m.kind = 'resale' and m.stock_item_id is not null
      ) x group by stock_item_id`,

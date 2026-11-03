@@ -45,18 +45,11 @@ export default function DashboardPage() {
   const [date, setDate] = useState(todayStr());
   const [asTable, setAsTable] = useState(false);
   const [year, setYear] = useState(Number(todayStr().slice(0, 4)));
-  const [opening, setOpening] = useState<number>(0);
 
   const dash = useQuery({ queryKey: ['dashboard', date], queryFn: () => api<DashboardDto>(`/dashboard?date=${date}`), placeholderData: (prev) => prev });
   const yearly = useQuery({ queryKey: ['dashboard', 'yearly', year], queryFn: () => api<YearlyRowDto[]>(`/dashboard/yearly?year=${year}`), placeholderData: (prev) => prev });
   const d = dash.data;
-  useEffect(() => { if (d) setOpening(d.cash.opening); }, [d?.date, d?.cash.opening]);
 
-  const saveOpening = useMutation({
-    mutationFn: () => api('/dashboard/opening-balance', { method: 'PUT', body: { date, amount: Math.round(opening || 0) } }),
-    onSuccess: () => { toast.success('Solde initial enregistré'); void qc.invalidateQueries({ queryKey: ['dashboard', date] }); },
-    onError: (e) => toast.error(errorMessage(e)),
-  });
 
   const series = (d?.series ?? []).map((s) => ({ ...s, label: s.date.slice(8) }));
   const maxTop = Math.max(1, ...(d?.top_items ?? []).map((t) => t.quantity));
@@ -117,23 +110,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader><CardTitle>Trésorerie du jour</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <dl className="space-y-2 text-sm">
-                <div className="flex justify-between"><dt className="text-muted-foreground">Encaissements (ventes)</dt><dd className="num font-medium">{money(d?.cash.inflow ?? 0)}</dd></div>
-                <div className="flex justify-between"><dt className="text-muted-foreground">Décaissements (achats + dépenses)</dt><dd className="num font-medium">{money(d?.cash.outflow ?? 0)}</dd></div>
-              </dl>
-              <div className="space-y-1.5">
-                <Label htmlFor="opening">Solde initial</Label>
-                <div className="flex gap-2">
-                  <Input id="opening" type="number" inputMode="numeric" min={0} step={1} value={Number.isNaN(opening) ? '' : opening} onChange={(e) => setOpening(e.target.valueAsNumber)} />
-                  <Button variant="outline" disabled={saveOpening.isPending} onClick={() => saveOpening.mutate()}>OK</Button>
-                </div>
-              </div>
-              <p className="flex items-baseline justify-between border-t border-border pt-3"><span className="text-sm">Reste en caisse</span><span className={cn('num font-display text-2xl font-semibold', (d?.cash.remaining ?? 0) < 0 && 'text-destructive')}>{money(d?.cash.remaining ?? 0)}</span></p>
-            </CardContent>
-          </Card>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-3">

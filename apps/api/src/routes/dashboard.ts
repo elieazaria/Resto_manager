@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { dateSchema, openingBalanceSchema, todayInTz, type DashboardDto, type YearlyRowDto } from '@resto/shared';
-import { audit } from '../auth.js';
+import { dateSchema, todayInTz, type DashboardDto, type YearlyRowDto } from '@resto/shared';
 import type { Ctx } from '../context.js';
 import { STOCK_LEVELS_SQL } from '../services/stock.js';
 
@@ -22,7 +21,7 @@ export function dashboardRoutes(app: FastifyInstance, ctx: Ctx) {
     const [start, next] = monthBounds(date);
     const db = ctx.db;
 
-    const [sales, purchases, expenses, opening, series, top, methods, low, open] = await Promise.all([
+    const [sales, purchases, expenses, series, top, methods, low, open] = await Promise.all([
       db.query<{ sales_day: number; sales_month: number; orders_day: number; orders_month: number }>(
         `select coalesce(sum(total) filter (where business_date = $1::date), 0)::bigint as sales_day,
                 coalesce(sum(total), 0)::bigint as sales_month,
@@ -43,7 +42,6 @@ export function dashboardRoutes(app: FastifyInstance, ctx: Ctx) {
          from expenses where date >= $2::date and date < $3::date`,
         [date, start, next],
       ),
-      db.query<{ amount: number }>('select amount from cash_openings where date = $1::date', [date]),
       db.query<{ date: string; total: number }>(
         `select d::date as date, coalesce(sum(o.total), 0)::bigint as total
          from generate_series($1::timestamp - interval '29 days', $1::timestamp, interval '1 day') d
@@ -73,7 +71,6 @@ export function dashboardRoutes(app: FastifyInstance, ctx: Ctx) {
     const s = sales.rows[0]!;
     const p = purchases.rows[0]!;
     const e = expenses.rows[0]!;
-    const openingAmount = opening.rows[0]?.amount ?? 0;
     return {
       date,
       kpis: {
@@ -87,12 +84,6 @@ export function dashboardRoutes(app: FastifyInstance, ctx: Ctx) {
         expenses_month: e.m,
         profit_day: s.sales_day - p.d - e.d,
         profit_month: s.sales_month - p.m - e.m,
-      },
-      cash: {
-        opening: openingAmount,
-        inflow: s.sales_day,
-        outflow: p.d + e.d,
-        remaining: openingAmount + s.sales_day - (p.d + e.d),
       },
       series: series.rows,
       top_items: top.rows,
@@ -116,16 +107,5 @@ export function dashboardRoutes(app: FastifyInstance, ctx: Ctx) {
       [year],
     );
     return rows.map((r) => ({ ...r, profit: r.sales - r.purchases - r.expenses }));
-  });
-
-  /** « Solde initial (à saisir) » de la trésorerie du jour. */
-  app.put('/dashboard/opening-balance', admin, async (req) => {
-    const b = openingBalanceSchema.parse(req.body);
-    await ctx.db.query(
-      'insert into cash_openings (date, amount) values ($1::date, $2) on conflict (date) do update set amount = excluded.amount',
-      [b.date, b.amount],
-    );
-    await audit(ctx.db, req.user, 'cash.opening', 'cash_opening', b.date, { amount: b.amount });
-    return b;
   });
 }
