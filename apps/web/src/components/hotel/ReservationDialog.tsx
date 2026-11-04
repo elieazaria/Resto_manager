@@ -6,13 +6,14 @@ import { HOTEL_PAYMENT_LABELS, HOTEL_PAYMENT_METHODS, type HotelPaymentMethod, t
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from '@/components/ui/dialog';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
+import { NumberField } from '@/components/ui/number-field';
 import { api } from '@/lib/api';
 import { money, shiftDate, todayStr } from '@/lib/format';
 import { daysBetween } from '@/lib/hotel';
 import { errorMessage } from '@/lib/utils';
 
 interface Extra { service_id: string | null; label: string; unit_price: number; quantity: number; per_night: boolean }
-interface Svc { id: string; name: string; unit_price: number; charge_mode: 'flat' | 'per_night'; is_active: boolean }
+interface Svc { id: string; name: string; unit_price: number; charge_mode: 'flat' | 'per_night'; is_active: boolean; walk_in?: boolean }
 const num = (v: string) => (v === '' ? 0 : Math.max(0, Math.round(Number(v)) || 0));
 
 export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
@@ -127,9 +128,9 @@ export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
             <div className="space-y-1.5"><Label>Arrivée</Label><Input type="date" value={arrival} onChange={(e) => { setArrival(e.target.value); if (e.target.value >= departure) setDeparture(shiftDate(e.target.value, 1)); }} /></div>
             <div className="space-y-1.5"><Label>Départ</Label><Input type="date" min={shiftDate(arrival, 1)} value={departure} onChange={(e) => setDeparture(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>Nombre de nuitées</Label><Input readOnly value={nights} /></div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1.5"><Label>Adultes</Label><Input type="number" min={1} value={adults} onChange={(e) => setAdults(Math.max(1, Number(e.target.value) || 1))} /></div>
-              <div className="space-y-1.5"><Label>Enfants</Label><Input type="number" min={0} value={children} onChange={(e) => setChildren(Math.max(0, Number(e.target.value) || 0))} /></div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5"><Label>Adultes</Label><NumberField value={adults} min={1} max={100} onChange={setAdults} aria-label="Adultes" /></div>
+              <div className="space-y-1.5"><Label>Enfants</Label><NumberField value={children} min={0} max={100} onChange={setChildren} aria-label="Enfants" /></div>
             </div>
           </section>
 
@@ -160,7 +161,7 @@ export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
                 <div key={id} className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="w-28 font-medium">{r?.number}</span>
                   <Label className="text-muted-foreground">Prix / nuit</Label>
-                  <Input className="num h-9 w-36" type="number" min={0} value={prices[id] ?? 0} onChange={(e) => setPrices({ ...prices, [id]: num(e.target.value) })} />
+                  <NumberField className="w-44" stepper={false} inputClassName="h-9 text-right" value={prices[id] ?? 0} onChange={(n) => setPrices((p) => ({ ...p, [id]: n }))} aria-label={`Prix par nuit ${r?.number ?? ''}`} />
                   {q && q.nightly.some((n) => n.rule) && <span className="text-xs text-muted-foreground">tarif dynamique : {[...new Set(q.nightly.map((n) => n.rule).filter(Boolean))].join(', ')}</span>}
                 </div>
               );
@@ -171,15 +172,15 @@ export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Label>Suppléments</Label>
               <div className="flex flex-wrap gap-1.5">
-                {(services.data ?? []).filter((s) => s.is_active).map((s) => <Button key={s.id} size="sm" variant="outline" onClick={() => addExtra(s)}><Plus /> {s.name}</Button>)}
+                {(services.data ?? []).filter((s) => s.is_active && !s.walk_in).map((s) => <Button key={s.id} size="sm" variant="outline" onClick={() => addExtra(s)}><Plus /> {s.name}</Button>)}
                 <Button size="sm" variant="ghost" onClick={() => addExtra()}><Plus /> Autre</Button>
               </div>
             </div>
             {extras.map((e, i) => (
               <div key={i} className="grid grid-cols-[1fr_5.5rem_7rem_auto] items-center gap-2">
                 <Input value={e.label} onChange={(ev) => upd(i, { label: ev.target.value })} aria-label="Libellé" />
-                <Input type="number" min={1} value={e.quantity} onChange={(ev) => upd(i, { quantity: Math.max(1, num(ev.target.value)) })} aria-label="Quantité" />
-                <Input type="number" min={0} value={e.unit_price} onChange={(ev) => upd(i, { unit_price: num(ev.target.value) })} aria-label="Prix unitaire" />
+                <NumberField min={1} max={999} stepper={false} value={e.quantity} onChange={(n) => upd(i, { quantity: n })} aria-label="Quantité" />
+                <NumberField stepper={false} inputClassName="text-right" value={e.unit_price} onChange={(n) => upd(i, { unit_price: n })} aria-label="Prix unitaire" />
                 <Button size="icon" variant="ghost" onClick={() => setExtras((x) => x.filter((_, j) => j !== i))} aria-label="Retirer"><Trash2 /></Button>
                 <label className="col-span-4 -mt-1 flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={e.per_night} onChange={(ev) => upd(i, { per_night: ev.target.checked })} /> facturé par nuit ({nights} nuit{nights > 1 ? 's' : ''})</label>
               </div>

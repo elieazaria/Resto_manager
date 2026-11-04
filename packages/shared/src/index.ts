@@ -364,6 +364,7 @@ export const hotelServiceSchema = z.object({
   name: text('Nom', 80),
   unit_price: money('Prix'),
   charge_mode: z.enum(CHARGE_MODES).default('flat'),
+  walk_in: z.boolean().default(false),
   is_active: z.boolean().default(true),
   sort_order: z.number().int().default(0),
 });
@@ -391,7 +392,7 @@ export const hotelClientSchema = z.object({
   notes: optionalText(300),
 });
 
-const extraLineSchema = z.object({
+export const extraLineSchema = z.object({
   service_id: idSchema.nullish(),
   label: text('Libellé', 100),
   unit_price: money('Prix'),
@@ -561,6 +562,8 @@ export interface HotelDashboardDto {
   monthly: { month: string; reservations: number; nights: number; revenue: number; collected: number }[];
   weekly: { week_start: string; reservations: number; nights: number; revenue: number }[];
   by_method: { method: HotelPaymentMethod; total: number }[];
+  walkin_today: number;
+  walkin_month: number;
 }
 
 /** Statut en temps réel d'une chambre (calculé, jamais stocké). */
@@ -582,6 +585,8 @@ export interface ProfitCostLine {
   qty: number; // quantité par portion (unité de stock)
   unit_cost: number | null; // Ar par unité de stock ; null = aucun achat enregistré
   cost: number | null;
+  /** Unité d'achat identique à l'unité de stock mais facteur ≠ 1 : très probablement une erreur de saisie. */
+  factor_warning: string | null;
 }
 export interface ProfitabilityRowDto {
   id: string;
@@ -630,4 +635,28 @@ export interface SalesReportDto {
   by_category: { name: string; quantity: number; revenue: number }[];
   top_items: { name: string; category_name: string | null; quantity: number; revenue: number }[];
   series: { date: string; total: number; orders: number }[];
+}
+
+/**
+ * Zod 4 : `.partial()` applique quand même les valeurs par défaut des champs absents (is_active → true, sort_order → 0…).
+ * Pour un PATCH on ne garde donc que les clés réellement présentes dans la requête.
+ */
+export function onlyProvided<T extends object>(parsed: T, body: unknown): Partial<T> {
+  const keys = body && typeof body === 'object' ? new Set(Object.keys(body)) : new Set<string>();
+  return Object.fromEntries(Object.entries(parsed).filter(([k]) => keys.has(k))) as Partial<T>;
+}
+
+export const walkinSchema = z.object({
+  service_id: idSchema.nullish(),
+  label: text('Libellé', 100),
+  unit_price: money('Prix'),
+  quantity: z.number().int().min(1).max(999),
+  method: z.enum(HOTEL_PAYMENT_METHODS).default('cash'),
+  sold_on: dateSchema.optional(),
+  customer: optionalText(100),
+  note: optionalText(300),
+});
+export interface HotelWalkinDto {
+  id: string; service_id: string | null; label: string; unit_price: number; quantity: number; amount: number;
+  method: HotelPaymentMethod; sold_on: string; customer: string | null; note: string | null; created_at: string;
 }

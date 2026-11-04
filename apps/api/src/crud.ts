@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { z } from 'zod';
-import { idSchema } from '@resto/shared';
+import { idSchema, onlyProvided } from '@resto/shared';
 import { audit, type AuthUser } from './auth.js';
 import type { Ctx } from './context.js';
 import type { Queryable } from './db.js';
@@ -62,7 +62,7 @@ export function registerCrud(app: FastifyInstance, ctx: Ctx, o: CrudOptions) {
 
   app.patch(`${o.path}/:id`, guard, async (req) => {
     const id = idParam(req);
-    const data = o.updateSchema.parse(req.body);
+    const data = onlyProvided(o.updateSchema.parse(req.body), req.body);
     const cols = Object.keys(data).filter((k) => data[k] !== undefined);
     if (!cols.length) throw notFound('Aucune modification');
     const row = await ctx.db.tx(async (q) => {

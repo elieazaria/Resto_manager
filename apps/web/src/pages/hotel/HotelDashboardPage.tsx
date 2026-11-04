@@ -29,6 +29,8 @@ export default function HotelDashboardPage() {
         <Kpi label="CA du mois" value={money(d.revenue_month)} />
         <Kpi label="Encaissé ce mois" value={money(d.collected_month)} />
         <Kpi label="Encaissé au total" value={money(d.collected_total)} />
+        <Kpi label="Ventes sur place (jour)" value={money(d.walkin_today)} hint="Piscine, clients externes" />
+        <Kpi label="Ventes sur place (mois)" value={money(d.walkin_month)} />
         <Kpi label="Réservations actives" value={String(d.status_counts.confirmed + d.status_counts.checked_in + d.status_counts.option)} />
       </div>
 

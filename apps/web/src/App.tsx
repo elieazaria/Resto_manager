@@ -27,6 +27,7 @@ const Users = lazyNamed('UsersPage');
 const hotelNamed = <K extends string>(k: K) => lazy(() => import('@/pages/hotel/hotelCrud').then((m) => ({ default: (m as any)[k] as () => ReactNode })));
 const HotelPlanning = lazy(() => import('@/pages/hotel/PlanningPage'));
 const HotelDashboard = lazy(() => import('@/pages/hotel/HotelDashboardPage'));
+const HotelWalkins = lazy(() => import('@/pages/hotel/WalkinsPage'));
 const HotelRooms = lazy(() => import('@/pages/hotel/RoomsPage'));
 const HotelSettings = lazy(() => import('@/pages/hotel/HotelSettingsPage'));
 const HotelClients = hotelNamed('HotelClientsPage');
@@ -84,6 +85,7 @@ export default function App() {
           <Route path="/users" element={admin(<Users />)} />
           <Route path="/hotel/planning" element={admin(<HotelPlanning />)} />
           <Route path="/hotel/dashboard" element={admin(<HotelDashboard />)} />
+          <Route path="/hotel/walkins" element={admin(<HotelWalkins />)} />
           <Route path="/hotel/rooms" element={admin(<HotelRooms />)} />
           <Route path="/hotel/clients" element={admin(<HotelClients />)} />
           <Route path="/hotel/rooms-admin" element={admin(<HotelRoomsAdmin />)} />

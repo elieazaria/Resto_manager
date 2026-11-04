@@ -4,10 +4,12 @@ import {
   HOTEL_RES_STATUSES,
   dateSchema,
   hotelClientSchema,
+  extraLineSchema,
   hotelPaymentSchema,
   hotelServiceSchema,
   hotelSettingsSchema,
   idSchema,
+  onlyProvided,
   rateRuleSchema,
   rateRulePatchSchema,
   reservationCreateSchema,
@@ -16,6 +18,8 @@ import {
   reservationUpdateSchema,
   roomSchema,
   roomTypeSchema,
+  todayInTz,
+  walkinSchema,
 } from '@resto/shared';
 import { audit } from '../auth.js';
 import type { Ctx } from '../context.js';
@@ -23,6 +27,11 @@ import { idParam, registerCrud } from '../crud.js';
 import { notFound } from '../errors.js';
 import {
   addPayment,
+  addExtra,
+  addWalkin,
+  deleteWalkin,
+  listWalkins,
+  removeExtra,
   createGroupReservation,
   createReservation,
   deletePayment,
@@ -84,7 +93,7 @@ export function hotelRoutes(app: FastifyInstance, ctx: Ctx) {
   });
   app.patch('/hotel/rooms/:id', admin, async (req) => {
     const id = idParam(req);
-    const b = roomSchema.partial().parse(req.body);
+    const b = onlyProvided(roomSchema.partial().parse(req.body), req.body);
     const cols = Object.keys(b).filter((k) => (b as any)[k] !== undefined);
     if (cols.length) {
       await ctx.db.tx(async (q) => {
@@ -131,7 +140,7 @@ export function hotelRoutes(app: FastifyInstance, ctx: Ctx) {
     return reply.status(201).send(await ctx.db.tx((q) => createGroupReservation(q, req.user, b, tz)));
   });
   app.patch('/hotel/reservations/:id', admin, async (req) => {
-    const b = reservationUpdateSchema.parse(req.body);
+    const b = onlyProvided(reservationUpdateSchema.parse(req.body), req.body);
     return ctx.db.tx((q) => updateReservation(q, req.user, idParam(req), b));
   });
   app.post('/hotel/reservations/:id/status', admin, async (req) => {
@@ -142,12 +151,35 @@ export function hotelRoutes(app: FastifyInstance, ctx: Ctx) {
     const b = hotelPaymentSchema.parse(req.body);
     return reply.status(201).send(await ctx.db.tx((q) => addPayment(q, req.user, idParam(req), b, tz)));
   });
+  app.post('/hotel/reservations/:id/extras', admin, async (req, reply) => {
+    const b = extraLineSchema.parse(req.body);
+    return reply.status(201).send(await ctx.db.tx((q) => addExtra(q, req.user, idParam(req), b)));
+  });
+  app.delete('/hotel/reservations/:id/extras/:eid', admin, async (req) => {
+    const eid = idSchema.parse((req.params as any).eid);
+    return ctx.db.tx((q) => removeExtra(q, req.user, idParam(req), eid));
+  });
   app.delete('/hotel/reservations/:id/payments/:pid', admin, async (req) => {
     const pid = idSchema.parse((req.params as any).pid);
     return ctx.db.tx((q) => deletePayment(q, req.user, idParam(req), pid));
   });
   app.delete('/hotel/reservations/:id', admin, async (req, reply) => {
     await ctx.db.tx((q) => deleteReservation(q, req.user, idParam(req)));
+    return reply.status(204).send();
+  });
+
+  /* Ventes sur place (entrée piscine pour clients externes…) */
+  app.get('/hotel/walkins', admin, async (req) => {
+    const f = z.object({ from: dateSchema.optional(), to: dateSchema.optional() }).parse(req.query);
+    const today = todayInTz(tz);
+    return listWalkins(ctx.db, f.from ?? today, f.to ?? f.from ?? today);
+  });
+  app.post('/hotel/walkins', admin, async (req, reply) => {
+    const b = walkinSchema.parse(req.body);
+    return reply.status(201).send(await ctx.db.tx((q) => addWalkin(q, req.user, b, tz)));
+  });
+  app.delete('/hotel/walkins/:id', admin, async (req, reply) => {
+    await ctx.db.tx((q) => deleteWalkin(q, req.user, idParam(req)));
     return reply.status(204).send();
   });
 

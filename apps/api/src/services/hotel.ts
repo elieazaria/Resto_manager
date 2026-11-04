@@ -7,6 +7,7 @@ import {
   roomLiveStatus,
   todayInTz,
   type HotelDashboardDto,
+  type HotelWalkinDto,
   type HotelExtraDto,
   type HotelPaymentDto,
   type HotelQuoteDto,
@@ -19,6 +20,7 @@ import {
   reservationCreateSchema,
   reservationGroupSchema,
   reservationUpdateSchema,
+  extraLineSchema, walkinSchema,
 } from '@resto/shared';
 import { audit, type AuthUser } from '../auth.js';
 import type { Queryable } from '../db.js';
@@ -267,6 +269,23 @@ export async function updateReservation(q: Queryable, user: AuthUser, id: string
   return getReservation(q, id);
 }
 
+/** Supplément commandé sur place (matelas, cuisine…) pendant ou avant le séjour. */
+export async function addExtra(q: Queryable, user: AuthUser, id: string, e: z.infer<typeof extraLineSchema>) {
+  const cur = await getReservation(q, id);
+  if (cur.status === 'checked_out' || cur.status === 'cancelled') throw conflict('Séjour terminé ou annulé : impossible d’ajouter un supplément', 'RESERVATION_CLOSED');
+  await q.query('insert into hotel_reservation_extras (reservation_id, service_id, label, unit_price, quantity, multiplier) values ($1,$2,$3,$4,$5,$6)', [id, e.service_id ?? null, e.label, e.unit_price, e.quantity, e.multiplier]);
+  await audit(q, user, 'hotel.extra.add', 'hotel_reservation', id, { label: e.label, quantity: e.quantity });
+  return getReservation(q, id);
+}
+export async function removeExtra(q: Queryable, user: AuthUser, id: string, extraId: string) {
+  const cur = await getReservation(q, id);
+  if (cur.status === 'checked_out' || cur.status === 'cancelled') throw conflict('Séjour terminé ou annulé : modification impossible', 'RESERVATION_CLOSED');
+  const r = await q.query('delete from hotel_reservation_extras where id = $1 and reservation_id = $2 returning id', [extraId, id]);
+  if (!r.rows.length) throw notFound('Supplément introuvable');
+  await audit(q, user, 'hotel.extra.remove', 'hotel_reservation', id, { extraId });
+  return getReservation(q, id);
+}
+
 const TRANSITIONS: Record<HotelResStatus, HotelResStatus[]> = {
   option: ['confirmed', 'checked_in', 'cancelled'],
   confirmed: ['option', 'checked_in', 'cancelled'],
@@ -368,6 +387,7 @@ export async function hotelDashboard(q: Queryable, tz: string): Promise<HotelDas
   ).rows;
   const pays = (await q.query<any>('select amount, method, paid_on from hotel_payments')).rows;
 
+  const wk = (await q.query<{ sold_on: string; amount: number }>('select sold_on, amount from hotel_walkins where sold_on >= $1::date', [monthStart(today)])).rows;
   const mStart = monthStart(today);
   const nextMonth = monthStart(addDays(mStart, 32));
   const inMonth = (d: string) => d >= mStart && d < nextMonth;
@@ -417,6 +437,8 @@ export async function hotelDashboard(q: Queryable, tz: string): Promise<HotelDas
     monthly: months,
     weekly,
     by_method: [...byMethod].map(([method, total]) => ({ method: method as any, total })),
+    walkin_today: wk.filter((w) => w.sold_on === today).reduce((a, w) => a + w.amount, 0),
+    walkin_month: wk.filter((w) => inMonth(w.sold_on)).reduce((a, w) => a + w.amount, 0),
   };
 }
 
@@ -446,6 +468,8 @@ export async function ensureHotelBase(q: Queryable) {
   if (svc === 0) {
     await q.query(`insert into hotel_services (name, unit_price, charge_mode, sort_order) values ('Matelas supplémentaire', 20000, 'per_night', 1), ('Location cuisine', 50000, 'flat', 2)`);
   }
+  await q.query(`insert into hotel_services (name, unit_price, charge_mode, walk_in, sort_order)
+    select 'Entrée piscine', 20000, 'flat', true, 10 where not exists (select 1 from hotel_services where lower(name) = 'entrée piscine')`);
   const rules = (await q.query<{ n: number }>('select count(*)::int as n from hotel_rate_rules')).rows[0]!.n;
   if (rules === 0) {
     const y = new Date().getUTCFullYear();
@@ -514,4 +538,23 @@ export async function loadDemo(q: Queryable, user: AuthUser, tz: string) {
   }
   await audit(q, user, 'hotel.demo.load', 'hotel');
   return { created };
+}
+
+/* ───────────── Ventes sur place (clients externes : entrée piscine…) ───────────── */
+export async function listWalkins(q: Queryable, from: string, to: string): Promise<HotelWalkinDto[]> {
+  return (await q.query<HotelWalkinDto>('select id, service_id, label, unit_price, quantity, amount, method, sold_on::text as sold_on, customer, note, created_at::text as created_at from hotel_walkins where sold_on between $1::date and $2::date order by sold_on desc, created_at desc', [from, to])).rows;
+}
+export async function addWalkin(q: Queryable, user: AuthUser, w: z.infer<typeof walkinSchema>, tz: string): Promise<HotelWalkinDto> {
+  const day = w.sold_on ?? todayInTz(tz);
+  const { rows } = await q.query<{ id: string }>(
+    'insert into hotel_walkins (service_id, label, unit_price, quantity, amount, method, sold_on, customer, note, created_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id',
+    [w.service_id ?? null, w.label, w.unit_price, w.quantity, w.unit_price * w.quantity, w.method, day, w.customer ?? null, w.note ?? null, user.id],
+  );
+  await audit(q, user, 'hotel_walkin.create', 'hotel_walkin', rows[0]!.id, { amount: w.unit_price * w.quantity });
+  return (await listWalkins(q, day, day)).find((x) => x.id === rows[0]!.id)!;
+}
+export async function deleteWalkin(q: Queryable, user: AuthUser, id: string) {
+  const r = await q.query('delete from hotel_walkins where id = $1 returning id', [id]);
+  if (!r.rows.length) throw notFound('Vente introuvable');
+  await audit(q, user, 'hotel_walkin.delete', 'hotel_walkin', id);
 }

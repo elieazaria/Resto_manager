@@ -125,3 +125,56 @@ describe('hôtel', () => {
     expect((await t.call('GET', '/api/hotel/rooms')).status).toBe(401);
   });
 });
+
+describe('suppléments sur place', () => {
+  it('ajout et retrait pendant le séjour ; refusé après le départ', async () => {
+    const rooms = (await call('GET', '/api/hotel/rooms')).json;
+    const r = (await call('POST', '/api/hotel/reservations', { new_client: { full_name: 'Sur place' }, room_id: rooms[8].id, arrival: day(60), departure: day(62), adults: 1, children: 0, price_per_night: 150000, status: 'confirmed' })).json;
+    const a = await call('POST', `/api/hotel/reservations/${r.id}/extras`, { label: 'Matelas', unit_price: 20000, quantity: 2, multiplier: 2 });
+    expect(a.status).toBe(201);
+    expect(a.json.extras_amount).toBe(80000);
+    expect(a.json.net_amount).toBe(r.net_amount + 80000);
+    const rm = await call('DELETE', `/api/hotel/reservations/${r.id}/extras/${a.json.extras[0].id}`);
+    expect(rm.json.extras_amount).toBe(0);
+    await call('POST', `/api/hotel/reservations/${r.id}/status`, { status: 'cancelled', reason: 'test' });
+    expect((await call('POST', `/api/hotel/reservations/${r.id}/extras`, { label: 'X', unit_price: 1, quantity: 1, multiplier: 1 })).status).toBe(409);
+  });
+});
+
+describe('PATCH partiel (valeurs par défaut non réappliquées)', () => {
+  it('changer l’état technique ne réactive pas / ne réordonne pas la chambre ; modifier une réservation garde adultes et suppléments', async () => {
+    const rooms = (await call('GET', '/api/hotel/rooms')).json;
+    const id = rooms[9].id;
+    await call('PATCH', `/api/hotel/rooms/${id}`, { is_active: false, sort_order: 77 });
+    await call('PATCH', `/api/hotel/rooms/${id}`, { tech_status: 'cleaning' });
+    const row = (await call('GET', '/api/hotel/rooms')).json.find((x: any) => x.id === id);
+    expect(row.is_active).toBe(false);
+    expect(row.sort_order).toBe(77);
+    await call('PATCH', `/api/hotel/rooms/${id}`, { is_active: true, tech_status: 'normal' });
+
+    const r = (await call('POST', '/api/hotel/reservations', { new_client: { full_name: 'Patch' }, room_id: rooms[10].id, arrival: day(80), departure: day(82), adults: 3, children: 1, price_per_night: 150000, status: 'confirmed', extras: [{ label: 'Matelas', unit_price: 20000, quantity: 1, multiplier: 1 }] })).json;
+    const u = (await call('PATCH', `/api/hotel/reservations/${r.id}`, { note: 'arrivée tardive' })).json;
+    expect(u.adults).toBe(3);
+    expect(u.children).toBe(1);
+    expect(u.extras).toHaveLength(1);
+    expect(u.note).toBe('arrivée tardive');
+  });
+});
+
+describe('ventes sur place (entrée piscine)', () => {
+  it('le service Entrée piscine existe ; une vente apparaît dans la liste et le tableau de bord', async () => {
+    await call('POST', '/api/hotel/bootstrap');
+    const svc = (await call('GET', '/api/hotel/services')).json.find((s: any) => s.name === 'Entrée piscine');
+    expect(svc.unit_price).toBe(20000);
+    expect(svc.walk_in).toBe(true);
+    const before = (await call('GET', '/api/hotel/dashboard')).json.walkin_today;
+    const w = await call('POST', '/api/hotel/walkins', { service_id: svc.id, label: 'Entrée piscine', unit_price: 20000, quantity: 3, method: 'mvola', customer: 'Famille locale' });
+    expect(w.status).toBe(201);
+    expect(w.json.amount).toBe(60000);
+    const list = (await call('GET', '/api/hotel/walkins')).json;
+    expect(list.some((x: any) => x.id === w.json.id)).toBe(true);
+    expect((await call('GET', '/api/hotel/dashboard')).json.walkin_today).toBe(before + 60000);
+    expect((await call('DELETE', `/api/hotel/walkins/${w.json.id}`)).status).toBe(204);
+    expect((await call('DELETE', `/api/hotel/walkins/${w.json.id}`)).status).toBe(404);
+  });
+});

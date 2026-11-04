@@ -62,9 +62,10 @@ export function HotelServicesPage() {
     fields: [
       { name: 'name', label: 'Nom', type: 'text' }, { name: 'unit_price', label: 'Prix unitaire (Ar)', ...NUM },
       { name: 'charge_mode', label: 'Facturation', type: 'select', options: opt(CHARGE_MODES, CHARGE_MODE_LABELS) },
+      { name: 'walk_in', label: 'Vente sur place pour clients externes (ex. piscine)', type: 'checkbox' },
       { name: 'sort_order', label: 'Ordre', ...NUM }, { name: 'is_active', label: 'Actif', type: 'checkbox' },
     ],
-    schema: hotelServiceSchema, defaults: { name: '', unit_price: 0, charge_mode: 'flat', sort_order: 0, is_active: true },
+    schema: hotelServiceSchema, defaults: { name: '', unit_price: 0, charge_mode: 'flat', walk_in: false, sort_order: 0, is_active: true },
   };
   return <CrudPage cfg={cfg} />;
 }
