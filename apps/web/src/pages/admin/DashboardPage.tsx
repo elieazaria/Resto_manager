@@ -4,9 +4,12 @@ import { Link } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { toast } from 'sonner';
 import { PAYMENT_LABELS, type DashboardDto, type PaymentMethod, type YearlyRowDto } from '@resto/shared';
+import { Banknote, PiggyBank, Receipt, ShoppingBasket, TrendingUp, type LucideIcon } from 'lucide-react';
+import { StatCard, type Tone } from '@/components/ui/stat-card';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input, Label, Select } from '@/components/ui/input';
+import { DateField } from '@/components/ui/date-field';
 import { PageHeader } from '@/components/PageHeader';
 import { SalesReportCard } from '@/components/SalesReportCard';
 import { api } from '@/lib/api';
@@ -19,15 +22,8 @@ const METHOD_COLOR: Record<PaymentMethod, string> = {
   cash: 'var(--series-1)', mvola: 'var(--series-2)', orange_money: 'var(--series-3)', airtel_money: 'var(--series-4)', card: 'var(--series-5)',
 };
 
-function Kpi({ label, value, hint, tone }: { label: string; value: number; hint?: string; tone?: 'profit' }) {
-  const neg = tone === 'profit' && value < 0;
-  return (
-    <Card className="px-4 py-3.5">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className={cn('num mt-1 font-display text-2xl font-semibold sm:text-[1.7rem]', neg && 'text-destructive')}>{money(value)}</p>
-      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
-    </Card>
-  );
+function Kpi({ label, value, hint, tone, icon, profit }: { label: string; value: number; hint?: string; tone: Tone; icon: LucideIcon; profit?: boolean }) {
+  return <StatCard label={label} value={money(value)} hint={hint} tone={tone} icon={icon} negative={profit && value < 0} />;
 }
 
 function SalesTooltip({ active, payload }: { active?: boolean; payload?: { payload: { date: string; total: number } }[] }) {
@@ -64,21 +60,21 @@ export default function DashboardPage() {
 
       {/* Filtre : une seule ligne au-dessus du contenu qu'il pilote */}
       <div className="flex flex-wrap items-end gap-2">
-        <div className="space-y-1.5"><Label htmlFor="date">Date de référence</Label><Input id="date" type="date" value={date} max={todayStr()} onChange={(e) => e.target.value && setDate(e.target.value)} className="w-44" /></div>
+        <div className="space-y-1.5"><Label htmlFor="date">Date de référence</Label><DateField id="date" value={date} max={todayStr()} onChange={setDate} /></div>
         <Button variant={isToday ? 'default' : 'outline'} onClick={() => setDate(todayStr())}>Aujourd’hui</Button>
         <Button variant={date === shiftDate(todayStr(), -1) ? 'default' : 'outline'} onClick={() => setDate(shiftDate(todayStr(), -1))}>Hier</Button>
       </div>
 
       <div className={cn('space-y-6 transition-opacity', dash.isFetching && 'opacity-70')}>
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Chiffre d'affaires et bénéfice">
-          <Kpi label="Ventes du jour" value={d?.kpis.sales_day ?? 0} hint={`${d?.kpis.orders_day ?? 0} ticket(s)`} />
-          <Kpi label="Ventes du mois" value={d?.kpis.sales_month ?? 0} hint={`${d?.kpis.orders_month ?? 0} ticket(s)`} />
-          <Kpi label="Bénéfice net du jour" value={d?.kpis.profit_day ?? 0} tone="profit" hint="ventes − achats − dépenses" />
-          <Kpi label="Bénéfice net du mois" value={d?.kpis.profit_month ?? 0} tone="profit" hint="ventes − achats − dépenses" />
-          <Kpi label="Achats du jour" value={d?.kpis.purchases_day ?? 0} />
-          <Kpi label="Achats du mois" value={d?.kpis.purchases_month ?? 0} />
-          <Kpi label="Dépenses du jour" value={d?.kpis.expenses_day ?? 0} />
-          <Kpi label="Dépenses du mois" value={d?.kpis.expenses_month ?? 0} />
+          <Kpi tone="green" icon={Banknote} label="Ventes du jour" value={d?.kpis.sales_day ?? 0} hint={`${d?.kpis.orders_day ?? 0} ticket(s)`} />
+          <Kpi tone="green" icon={TrendingUp} label="Ventes du mois" value={d?.kpis.sales_month ?? 0} hint={`${d?.kpis.orders_month ?? 0} ticket(s)`} />
+          <Kpi tone="violet" icon={PiggyBank} profit label="Bénéfice net du jour" value={d?.kpis.profit_day ?? 0} hint="ventes − achats − dépenses" />
+          <Kpi tone="violet" icon={PiggyBank} profit label="Bénéfice net du mois" value={d?.kpis.profit_month ?? 0} hint="ventes − achats − dépenses" />
+          <Kpi tone="blue" icon={ShoppingBasket} label="Achats du jour" value={d?.kpis.purchases_day ?? 0} />
+          <Kpi tone="blue" icon={ShoppingBasket} label="Achats du mois" value={d?.kpis.purchases_month ?? 0} />
+          <Kpi tone="red" icon={Receipt} label="Dépenses du jour" value={d?.kpis.expenses_day ?? 0} />
+          <Kpi tone="red" icon={Receipt} label="Dépenses du mois" value={d?.kpis.expenses_month ?? 0} />
         </section>
 
         <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">

@@ -122,7 +122,7 @@ export function HotelClientsPage() {
 }
 
 function AccountDialog({ client, onClose, onOpen }: { client: any | null; onClose: () => void; onOpen: (id: string) => void }) {
-  const q = useQuery({ queryKey: ['hotel', 'account', client?.id], queryFn: () => api<{ reservations: HotelReservationDto[]; totals: { billed: number; paid: number; balance: number } }>(`/hotel/clients/${client.id}/account`), enabled: !!client });
+  const q = useQuery({ queryKey: ['hotel', 'account', client?.id], queryFn: () => api<{ reservations: HotelReservationDto[]; totals: { billed: number; paid: number; balance: number; paid_on_cancelled: number } }>(`/hotel/clients/${client.id}/account`), enabled: !!client });
   const settings = useQuery({ queryKey: ['hotel', 'settings'], queryFn: () => api<HotelSettings>('/hotel/settings'), enabled: !!client });
   const a = q.data;
   return (
@@ -133,9 +133,10 @@ function AccountDialog({ client, onClose, onOpen }: { client: any | null; onClos
           {!a ? <p className="text-muted-foreground">Chargement…</p> : (<>
             <dl className="num grid grid-cols-3 gap-3 rounded-lg bg-muted/60 p-3 text-sm">
               <div><dt className="text-muted-foreground">Facturé</dt><dd className="font-semibold">{money(a.totals.billed)}</dd></div>
-              <div><dt className="text-muted-foreground">Payé</dt><dd className="font-semibold">{money(a.totals.paid)}</dd></div>
+              <div><dt className="text-muted-foreground">Payé (séjours actifs)</dt><dd className="font-semibold">{money(a.totals.paid)}</dd></div>
               <div><dt className="text-muted-foreground">Solde dû</dt><dd className="font-semibold text-destructive">{money(a.totals.balance)}</dd></div>
             </dl>
+            {a.totals.paid_on_cancelled > 0 && <p className="rounded-lg bg-accent/30 p-2.5 text-sm">Attention : {money(a.totals.paid_on_cancelled)} ont été encaissés sur des réservations annulées (non comptés dans « Payé »). À rembourser depuis la réservation annulée, ou à reporter.</p>}
             <ul className="divide-y divide-border text-sm">
               {a.reservations.map((r) => (
                 <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">

@@ -6,6 +6,8 @@ import { HOTEL_PAYMENT_LABELS, HOTEL_PAYMENT_METHODS, type HotelPaymentMethod, t
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from '@/components/ui/dialog';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
+import { DateField } from '@/components/ui/date-field';
+import { TimeField24 } from '@/components/ui/time-field';
 import { NumberField } from '@/components/ui/number-field';
 import { api } from '@/lib/api';
 import { money, shiftDate, todayStr } from '@/lib/format';
@@ -22,6 +24,7 @@ export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
   const qc = useQueryClient();
   const rooms = useQuery({ queryKey: ['hotel', 'rooms'], queryFn: () => api<HotelRoomDto[]>('/hotel/rooms'), enabled: open });
   const clients = useQuery({ queryKey: ['hotel', 'clients'], queryFn: () => api<any[]>('/hotel/clients'), enabled: open });
+  const hs = useQuery({ queryKey: ['hotel', 'settings'], queryFn: () => api<HotelSettings>('/hotel/settings'), enabled: open });
   const services = useQuery({ queryKey: ['hotel', 'services'], queryFn: () => api<Svc[]>('/hotel/services'), enabled: open });
   const settings = useQuery({ queryKey: ['hotel', 'settings'], queryFn: () => api<HotelSettings>('/hotel/settings'), enabled: open });
 
@@ -42,11 +45,14 @@ export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
   const [deposit, setDeposit] = useState('');
   const [method, setMethod] = useState<HotelPaymentMethod>('cash');
   const [note, setNote] = useState('');
+  const [cin, setCin] = useState('');
+  const [cout, setCout] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     const a = initial?.arrival ?? todayStr();
+    setCin(''); setCout('');
     setArrival(a); setDeparture(shiftDate(a, 1)); setRoomIds(initial?.room_id ? [initial.room_id] : []);
     setGroup(false); setNewClient(false); setClientId(''); setNc({ full_name: '', phone: '', email: '' }); setAdults(1); setChildren(0);
     setPrices({}); setExtras([]); setDiscPct(''); setDiscAmt(''); setStatus('confirmed'); setDeposit(''); setMethod('cash'); setNote('');
@@ -84,6 +90,7 @@ export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
     const body: any = {
       ...(newClient ? { new_client: { full_name: nc.full_name.trim(), phone: nc.phone, email: nc.email } } : { client_id: clientId }),
       arrival, departure, adults, children, status, note: note || null,
+      checkin_time: cin && cin !== hs.data?.checkin_time ? cin : null, checkout_time: cout && cout !== hs.data?.checkout_time ? cout : null,
       discount_percent: discAmt ? 0 : pct, discount_amount: discount,
       extras: extras.filter((e) => e.quantity > 0).map((e) => ({ service_id: e.service_id, label: e.label, unit_price: e.unit_price, quantity: e.quantity, multiplier: e.per_night ? nights : 1 })),
       ...(dep > 0 ? { deposit: { amount: dep, method } } : {}),
@@ -125,8 +132,8 @@ export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
                 </Select>
               )}
             </div>
-            <div className="space-y-1.5"><Label>Arrivée</Label><Input type="date" value={arrival} onChange={(e) => { setArrival(e.target.value); if (e.target.value >= departure) setDeparture(shiftDate(e.target.value, 1)); }} /></div>
-            <div className="space-y-1.5"><Label>Départ</Label><Input type="date" min={shiftDate(arrival, 1)} value={departure} onChange={(e) => setDeparture(e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>Arrivée</Label><DateField value={arrival} onChange={(v) => { setArrival(v); if (v >= departure) setDeparture(shiftDate(v, 1)); }} /></div>
+            <div className="space-y-1.5"><Label>Départ</Label><DateField min={shiftDate(arrival, 1)} value={departure} onChange={setDeparture} /></div>
             <div className="space-y-1.5"><Label>Nombre de nuitées</Label><Input readOnly value={nights} /></div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5"><Label>Adultes</Label><NumberField value={adults} min={1} max={100} onChange={setAdults} aria-label="Adultes" /></div>
@@ -195,6 +202,8 @@ export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
             <div className="space-y-1.5"><Label>Acompte (Ar)</Label><Input type="number" min={0} value={deposit} onChange={(e) => setDeposit(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>Mode de paiement</Label>
               <Select value={method} onChange={(e) => setMethod(e.target.value as any)}>{HOTEL_PAYMENT_METHODS.map((m) => <option key={m} value={m}>{HOTEL_PAYMENT_LABELS[m]}</option>)}</Select></div>
+            <div className="space-y-1.5"><Label>Heure d’arrivée</Label><TimeField24 value={cin || hs.data?.checkin_time || '14:00'} onChange={setCin} aria-label="Heure d’arrivée" /></div>
+            <div className="space-y-1.5"><Label>Heure de départ</Label><TimeField24 value={cout || hs.data?.checkout_time || '12:00'} onChange={setCout} aria-label="Heure de départ" /></div>
             <div className="space-y-1.5 sm:col-span-3"><Label>Besoin / observation</Label><Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></div>
           </section>
 

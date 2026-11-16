@@ -4,10 +4,18 @@ import { api } from './api';
 
 /** Couleurs des barres du planning (même code que la maquette). */
 export const STATUS_COLOR: Record<HotelResStatus, string> = {
-  option: '#f59e0b', confirmed: '#16a34a', checked_in: '#2563eb', checked_out: '#6b7280', cancelled: '#dc2626',
+  option: '#b45309', confirmed: '#15803d', checked_in: '#1f6fa3', checked_out: '#6b7280', cancelled: '#b91c1c',
+};
+/** Style des barres du planning : en séjour plein, confirmée crème, option pointillée, terminée grise. */
+export const BAR_STYLE: Record<HotelResStatus, { background: string; color: string; border: string; borderStyle?: string; textDecoration?: string }> = {
+  checked_in: { background: '#1f6fa3', color: '#fff', border: '#0d3b5c' },
+  confirmed: { background: '#d3f0dd', color: '#0a5a28', border: '#4fb877' },
+  option: { background: '#fff4d6', color: '#7a3f00', border: '#d99a2b', borderStyle: 'dashed' },
+  checked_out: { background: '#e5e7eb', color: '#4b5563', border: '#c4c8ce' },
+  cancelled: { background: '#fde8e6', color: '#b42318', border: '#f3b3ad', textDecoration: 'line-through' },
 };
 export const LIVE_COLOR: Record<RoomLiveStatus, string> = {
-  available: '#16a34a', reserved: '#f59e0b', arriving: '#8b5cf6', occupied: '#2563eb', cleaning: '#06b6d4', maintenance: '#ea580c', out_of_service: '#6b7280',
+  available: '#15803d', reserved: '#7c3aed', arriving: '#0891b2', occupied: '#1f6fa3', cleaning: '#d97706', maintenance: '#c2410c', out_of_service: '#6b7280',
 };
 export const PAY_LABEL = { unpaid: 'Impayé', partial: 'Acompte versé', paid: 'Payé intégralement' } as const;
 export const PAY_TONE = { unpaid: 'danger', partial: 'warn', paid: 'ok' } as const;

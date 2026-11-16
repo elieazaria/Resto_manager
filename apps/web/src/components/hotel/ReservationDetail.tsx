@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from '@/components/ui/dialog';
 import { Input, Label, Select } from '@/components/ui/input';
+import { TimeField24 } from '@/components/ui/time-field';
 import { NumberField } from '@/components/ui/number-field';
 import { api } from '@/lib/api';
 import { fmtDate, money } from '@/lib/format';
@@ -27,6 +28,18 @@ export function ReservationDetail({ id, onClose }: { id: string | null; onClose:
   const [sQty, setSQty] = useState(1);
   const [sSvc, setSSvc] = useState<{ id: string | null; perNight: boolean }>({ id: null, perNight: false });
   const r = q.data;
+  const grp = useQuery({ queryKey: ['hotel', 'group', r?.group_id], queryFn: () => api<{ reservations: HotelReservationDto[]; totals: { billed: number; paid: number; balance: number; surplus: number } }>(`/hotel/groups/${r!.group_id}`), enabled: !!r?.group_id });
+  const [gAmount, setGAmount] = useState('');
+  const [gMethod, setGMethod] = useState<HotelPaymentMethod>('cash');
+  const payGroup = () => {
+    const n = Math.round(Number(gAmount));
+    if (!n || n <= 0) return toast.error('Montant invalide');
+    run.mutate(async () => { await api(`/hotel/groups/${r!.group_id}/payments`, { method: 'POST', body: { amount: n, method: gMethod, kind: 'payment' } }); setGAmount(''); toast.success('Paiement réparti sur les chambres du groupe'); });
+  };
+  const [times, setTimes] = useState<{ cin: string; cout: string } | null>(null);
+  const cinEff = r?.checkin_time ?? settings.data?.checkin_time ?? '14:00';
+  const coutEff = r?.checkout_time ?? settings.data?.checkout_time ?? '12:00';
+  const saveTimes = () => times && run.mutate(async () => { await api(`/hotel/reservations/${id}`, { method: 'PATCH', body: { checkin_time: times.cin, checkout_time: times.cout } }); setTimes(null); toast.success('Heures enregistrées'); });
   const refresh = () => { void qc.invalidateQueries({ queryKey: ['hotel'] }); };
 
   const run = useMutation({
@@ -70,6 +83,17 @@ export function ReservationDetail({ id, onClose }: { id: string | null; onClose:
               </div>
               <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
                 <div><dt className="inline text-muted-foreground">Séjour : </dt><dd className="num inline">{fmtDate(r.arrival)} → {fmtDate(r.departure)} ({r.nights} nuit{r.nights > 1 ? 's' : ''})</dd></div>
+                <div className="sm:col-span-2"><dt className="inline text-muted-foreground">Arrivée / départ : </dt>
+                  {times ? (
+                    <dd className="mt-1 flex flex-wrap items-center gap-2">
+                      <TimeField24 className="w-36" value={times.cin} onChange={(v) => setTimes({ ...times, cin: v })} aria-label="Heure d’arrivée" />
+                      <TimeField24 className="w-36" value={times.cout} onChange={(v) => setTimes({ ...times, cout: v })} aria-label="Heure de départ" />
+                      <Button size="sm" onClick={saveTimes} disabled={run.isPending}>Enregistrer</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setTimes(null)}>Annuler</Button>
+                    </dd>
+                  ) : (
+                    <dd className="num inline">{cinEff} → {coutEff}{r.status !== 'cancelled' && r.status !== 'checked_out' && <Button size="sm" variant="ghost" className="ml-1" onClick={() => setTimes({ cin: cinEff, cout: coutEff })}>Modifier</Button>}</dd>
+                  )}</div>
                 <div><dt className="inline text-muted-foreground">Personnes : </dt><dd className="inline">{r.adults} adulte(s), {r.children} enfant(s)</dd></div>
                 <div><dt className="inline text-muted-foreground">Téléphone : </dt><dd className="inline">{r.client_phone ?? '—'}</dd></div>
                 <div><dt className="inline text-muted-foreground">Type : </dt><dd className="inline">{r.room_type_name}</dd></div>
@@ -88,6 +112,34 @@ export function ReservationDetail({ id, onClose }: { id: string | null; onClose:
                   <tr className="font-display text-base font-semibold"><td className="py-1.5">Reste à payer</td><td className={`text-right ${r.balance > 0 ? 'text-destructive' : ''}`}>{money(Math.max(0, r.balance))}</td></tr>
                 </tbody>
               </table>
+
+              {r.group_id && grp.data && (
+                <section className="rounded-lg border p-3" style={{ borderColor: 'color-mix(in srgb, var(--tone-violet) 35%, var(--border))', background: 'color-mix(in srgb, var(--tone-violet) 6%, var(--card))' }}>
+                  <h3 className="mb-1 text-sm font-semibold">Réservation groupée · {grp.data.reservations.filter((x) => x.status !== 'cancelled').length} chambre(s)</h3>
+                  <ul className="mb-2 divide-y divide-border text-sm">
+                    {grp.data.reservations.map((x) => (
+                      <li key={x.id} className={`flex justify-between gap-2 py-1 ${x.id === r.id ? 'font-medium' : ''}`}>
+                        <span>Ch. {x.room_number}{x.status === 'cancelled' ? ' (annulée)' : ''}</span>
+                        <span className="num">{money(x.net_amount)} · payé {money(x.paid_amount)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <dl className="num grid grid-cols-3 gap-2 text-sm">
+                    <div><dt className="text-muted-foreground">Total groupe</dt><dd className="font-semibold">{money(grp.data.totals.billed)}</dd></div>
+                    <div><dt className="text-muted-foreground">Payé</dt><dd className="font-semibold">{money(grp.data.totals.paid)}</dd></div>
+                    <div><dt className="text-muted-foreground">Reste</dt><dd className="font-semibold text-destructive">{money(grp.data.totals.balance)}</dd></div>
+                  </dl>
+                  {grp.data.totals.surplus > 0 && <p className="mt-2 text-xs text-destructive">Trop-perçu de {money(grp.data.totals.surplus)} : supprimez le paiement en double ou remboursez depuis la chambre concernée.</p>}
+                  {grp.data.totals.balance > 0 && (
+                    <div className="mt-3 grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                      <div className="space-y-1"><Label>Payer pour tout le groupe (Ar)</Label><NumberField stepper={false} min={0} value={Number(gAmount) || 0} onChange={(n) => setGAmount(String(n))} aria-label="Montant groupe" />
+                        <button type="button" className="text-xs text-primary underline" onClick={() => setGAmount(String(grp.data!.totals.balance))}>Solde du groupe : {money(grp.data.totals.balance)}</button></div>
+                      <div className="space-y-1"><Label>Mode</Label><Select value={gMethod} onChange={(e) => setGMethod(e.target.value as HotelPaymentMethod)}>{HOTEL_PAYMENT_METHODS.map((m) => <option key={m} value={m}>{HOTEL_PAYMENT_LABELS[m]}</option>)}</Select></div>
+                      <Button onClick={payGroup} disabled={run.isPending}>Encaisser</Button>
+                    </div>
+                  )}
+                </section>
+              )}
 
               {r.status !== 'cancelled' && r.status !== 'checked_out' && (
                 <section className="rounded-lg border border-border p-3">
@@ -124,7 +176,7 @@ export function ReservationDetail({ id, onClose }: { id: string | null; onClose:
                 )}
                 {r.status !== 'cancelled' && (
                   <div className="mt-3 grid grid-cols-[1fr_1fr_1fr_auto] items-end gap-2">
-                    <div className="space-y-1"><Label>Montant (Ar)</Label><Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={r.balance > 0 ? String(r.balance) : ''} /></div>
+                    <div className="space-y-1"><Label>Montant (Ar)</Label><Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={r.balance > 0 ? String(r.balance) : ''} />{r.balance > 0 && <button type="button" className="text-xs text-primary underline" onClick={() => { setAmount(String(r.balance)); setKind('payment'); }}>Solde : {money(r.balance)}</button>}</div>
                     <div className="space-y-1"><Label>Mode</Label><Select value={method} onChange={(e) => setMethod(e.target.value as any)}>{HOTEL_PAYMENT_METHODS.map((m) => <option key={m} value={m}>{HOTEL_PAYMENT_LABELS[m]}</option>)}</Select></div>
                     <div className="space-y-1"><Label>Type</Label><Select value={kind} onChange={(e) => setKind(e.target.value as any)}><option value="payment">Paiement</option><option value="refund">Remboursement</option></Select></div>
                     <Button onClick={pay} disabled={run.isPending}>Ajouter</Button>

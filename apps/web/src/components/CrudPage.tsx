@@ -35,6 +35,8 @@ export interface FieldDef {
   /** Champ masqué selon les autres valeurs du formulaire. */
   hideWhen?: (v: Record<string, any>) => boolean;
   span?: 2;
+  /** Avertissement affiché sous le champ selon les valeurs du formulaire. */
+  warn?: (v: Record<string, any>) => string | null;
 }
 
 export interface CrudConfig<Row extends { id: string }> {
@@ -149,6 +151,7 @@ export function FormDialog({
                     {f.type === 'number' && (
                       <Input {...common} type="number" step={f.step ?? 'any'} inputMode={f.inputMode ?? 'decimal'} placeholder={f.placeholder} {...register(f.name, { valueAsNumber: true })} />
                     )}
+                    {f.warn?.(all) && <p className="rounded bg-accent/30 px-2 py-1 text-xs text-[#0d3b5c]" role="status">⚠ {f.warn(all)}</p>}
                     {f.help && !err && <p className="text-xs text-muted-foreground">{f.help}</p>}
                     {err && <p className="text-xs text-destructive" role="alert">{err}</p>}
                   </div>

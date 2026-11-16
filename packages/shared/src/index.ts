@@ -416,6 +416,8 @@ const reservationBase = z.object({
   discount_amount: money('Remise').default(0),
   status: z.enum(['option', 'confirmed']).default('confirmed'),
   note: optionalText(500),
+  checkin_time: z.string().regex(/^\d{2}:\d{2}$/, 'Heure invalide').nullish(),
+  checkout_time: z.string().regex(/^\d{2}:\d{2}$/, 'Heure invalide').nullish(),
   extras: z.array(extraLineSchema).max(30).default([]),
 });
 const dateOrder = (v: { arrival: string; departure: string }) => v.departure > v.arrival;
@@ -499,6 +501,9 @@ export interface HotelReservationDto {
   adults: number;
   children: number;
   price_per_night: number;
+  /** Heures propres à la réservation ; null = heure par défaut des réglages. */
+  checkin_time: string | null;
+  checkout_time: string | null;
   lodging_amount: number;
   extras: HotelExtraDto[];
   extras_amount: number;

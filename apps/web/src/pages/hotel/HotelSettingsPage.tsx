@@ -6,6 +6,7 @@ import { DEFAULT_HOTEL_SETTINGS, type HotelSettings } from '@resto/shared';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Label, Textarea } from '@/components/ui/input';
+import { TimeField24 } from '@/components/ui/time-field';
 import { PageHeader } from '@/components/PageHeader';
 import { api } from '@/lib/api';
 import { errorMessage } from '@/lib/utils';
@@ -34,7 +35,8 @@ export default function HotelSettingsPage() {
           {txt('name', 'Nom de l’hôtel')} {txt('tax_id', 'NIF / STAT')}
           {txt('address', 'Adresse')} {txt('phone', 'Téléphone')} {txt('email', 'E-mail')}
           {txt('ref_prefix', 'Préfixe des réservations', { placeholder: 'HM-01' })}
-          {txt('checkin_time', 'Heure d’arrivée', { type: 'time' })} {txt('checkout_time', 'Heure de départ', { type: 'time' })}
+          <div className="space-y-1.5"><Label>Heure d’arrivée (24 h)</Label><TimeField24 value={s.checkin_time} onChange={(v) => set('checkin_time', v)} aria-label="Heure d’arrivée" /></div>
+          <div className="space-y-1.5"><Label>Heure de départ (24 h)</Label><TimeField24 value={s.checkout_time} onChange={(v) => set('checkout_time', v)} aria-label="Heure de départ" /></div>
           {txt('tourist_tax_per_person_night', 'Taxe de séjour (Ar / personne / nuit)', { type: 'number' })}
           {txt('vat_percent', 'TVA incluse (%)', { type: 'number' })}
         </div>

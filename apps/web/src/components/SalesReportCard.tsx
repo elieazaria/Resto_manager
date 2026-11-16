@@ -6,6 +6,7 @@ import type { SalesReportDto, Settings, YearlyRowDto } from '@resto/shared';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input, Label, Select } from '@/components/ui/input';
+import { DateField } from '@/components/ui/date-field';
 import { api } from '@/lib/api';
 import { fmtDate, fmtQty, money, todayStr } from '@/lib/format';
 import { comparePeriod, pct, periodOf, PERIOD_LABELS, type CompareKind, type PeriodKind } from '@/lib/period';
@@ -69,7 +70,7 @@ export function SalesReportCard() {
           <div className="space-y-1.5"><Label htmlFor="pk">Période</Label>
             <Select id="pk" className="h-10 w-36" value={kind} onChange={(e) => setKind(e.target.value as PeriodKind)}>{(Object.keys(PERIOD_LABELS) as PeriodKind[]).map((k) => <option key={k} value={k}>{PERIOD_LABELS[k]}</option>)}</Select></div>
           <div className="space-y-1.5"><Label htmlFor="pr">Date de référence</Label>
-            <Input id="pr" type="date" className="h-10 w-44" value={ref} max={todayStr()} onChange={(e) => e.target.value && setRef(e.target.value)} /></div>
+            <DateField id="pr" value={ref} max={todayStr()} onChange={setRef} /></div>
           <div className="space-y-1.5"><Label htmlFor="pc">Comparer à</Label>
             <Select id="pc" className="h-10 w-56" value={cmp} onChange={(e) => setCmp(e.target.value as CompareKind)}>
               <option value="previous">La période précédente</option><option value="lastyear">La même période l’an dernier</option><option value="none">Aucune comparaison</option></Select></div>

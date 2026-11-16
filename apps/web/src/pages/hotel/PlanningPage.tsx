@@ -7,17 +7,20 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogHeader } from '@/components/ui/dialog';
 import { Input, Select } from '@/components/ui/input';
+import { DateField } from '@/components/ui/date-field';
 import { PageHeader } from '@/components/PageHeader';
 import { ReservationDetail } from '@/components/hotel/ReservationDetail';
 import { ReservationDialog } from '@/components/hotel/ReservationDialog';
 import { api } from '@/lib/api';
 import { fmtDate, money, shiftDate, todayStr } from '@/lib/format';
-import { daysBetween, downloadCsv, PAY_LABEL, STATUS_COLOR, useReservations, useRooms } from '@/lib/hotel';
+import { BAR_STYLE, daysBetween, downloadCsv, PAY_LABEL, STATUS_COLOR, useReservations, useRooms } from '@/lib/hotel';
 import { pdfPlanning, pdfReservations } from '@/lib/pdf';
 import { cn } from '@/lib/utils';
 
-const CELL = 44;
-const DOW = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+const CELL = 56;
+const LABEL_W = 170;
+const ROW_H = 60;
+const DOW = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
 type Chip = 'all' | 'arrivals' | 'departures' | 'confirmed' | 'option' | 'cancelled';
 
 export default function PlanningPage() {
@@ -57,11 +60,6 @@ export default function PlanningPage() {
   });
 
   const activeRooms = (rooms.data ?? []).filter((r) => r.is_active && (!type || r.room_type_id === type));
-  const groups = useMemo(() => {
-    const m = new Map<string, { name: string; color: string; rooms: typeof activeRooms }>();
-    for (const r of activeRooms) (m.get(r.room_type_id) ?? m.set(r.room_type_id, { name: r.type_name, color: r.color, rooms: [] }).get(r.room_type_id)!).rooms.push(r);
-    return [...m.values()];
-  }, [activeRooms]);
   const types = useMemo(() => [...new Map((rooms.data ?? []).map((r) => [r.room_type_id, r.type_name])).entries()], [rooms.data]);
 
   const chips: { k: Chip; label: string; n?: number }[] = [
@@ -81,8 +79,8 @@ export default function PlanningPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Planning des réservations"
-        description="Cliquez sur une case libre pour réserver, sur une barre pour ouvrir le dossier."
+        title="Planning des chambres"
+        description="Cliquez sur une case vide pour réserver, sur une barre pour ouvrir le dossier."
         actions={
           <>
             <Button variant="outline" onClick={() => setListOpen(true)}><ListOrdered /> Vue planning liste</Button>
@@ -102,7 +100,7 @@ export default function PlanningPage() {
         ))}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <Button size="icon" variant="outline" aria-label="Période précédente" onClick={() => setStart(shiftDate(start, -7))}><ChevronLeft /></Button>
-          <Input type="date" className="h-10 w-40" value={start} onChange={(e) => e.target.value && setStart(e.target.value)} aria-label="Début" />
+          <DateField value={start} onChange={setStart} aria-label="Début" />
           <Button size="icon" variant="outline" aria-label="Période suivante" onClick={() => setStart(shiftDate(start, 7))}><ChevronRight /></Button>
           <Button variant="ghost" onClick={() => setStart(shiftDate(today, -3))}>Aujourd’hui</Button>
           <Select className="h-10 w-32" value={span} onChange={(e) => setSpan(Number(e.target.value))} aria-label="Durée">
@@ -115,57 +113,61 @@ export default function PlanningPage() {
       </div>
 
       <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-        {(['option', 'confirmed', 'checked_in', 'checked_out'] as HotelResStatus[]).map((s) => (
-          <span key={s} className="inline-flex items-center gap-1.5"><i className="size-3 rounded-sm" style={{ background: STATUS_COLOR[s] }} />{HOTEL_STATUS_LABELS[s]}</span>
+        {(['checked_in', 'confirmed', 'option', 'checked_out'] as HotelResStatus[]).map((st) => (
+          <span key={st} className="inline-flex items-center gap-1.5"><i className="size-3 rounded-sm border" style={{ background: BAR_STYLE[st].background, borderColor: BAR_STYLE[st].border, borderStyle: BAR_STYLE[st].borderStyle }} />{HOTEL_STATUS_LABELS[st]}</span>
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-card">
-        <div style={{ width: 150 + span * CELL }} className="relative">
-          <div className="sticky top-0 z-20 flex border-b border-border bg-muted/70 text-xs">
-            <div className="sticky left-0 z-30 w-[150px] shrink-0 border-r border-border bg-muted px-3 py-2 font-semibold">Chambre</div>
+      <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+        <div style={{ width: LABEL_W + span * CELL }} className="relative">
+          <div className="sticky top-0 z-20 flex border-b border-border bg-card text-xs">
+            <div className="sticky left-0 z-30 flex w-[170px] shrink-0 flex-col justify-center border-r border-border bg-card px-4 py-2">
+              <span className="text-sm text-muted-foreground">Chambre</span><span className="text-[11px] text-muted-foreground/80">Remplissage</span>
+            </div>
             {days.map((d) => {
               const dt = new Date(`${d}T00:00:00Z`);
+              const busy = new Set(all.filter((r) => r.status !== 'cancelled' && r.arrival <= d && r.departure > d).map((r) => r.room_id));
+              const pct = activeRooms.length ? Math.round((activeRooms.filter((rm) => busy.has(rm.id)).length / activeRooms.length) * 100) : 0;
               return (
-                <div key={d} style={{ width: CELL }} className={cn('shrink-0 border-r border-border/50 py-1 text-center', d === today && 'bg-accent/40 font-semibold', [0, 6].includes(dt.getUTCDay()) && 'text-muted-foreground')}>
-                  <div>{DOW[dt.getUTCDay()]}</div><div className="num">{d.slice(8)}/{d.slice(5, 7)}</div>
+                <div key={d} style={{ width: CELL }} className={cn('shrink-0 border-r border-border/40 py-1.5 text-center', d === today && 'bg-accent/30', [0, 6].includes(dt.getUTCDay()) && d !== today && 'bg-muted/40')}>
+                  <div className="text-muted-foreground">{DOW[dt.getUTCDay()]}</div>
+                  <div className={cn('num font-display text-lg font-semibold leading-tight', d === today && 'text-primary')}>{Number(d.slice(8))}</div>
+                  <div className="num text-[11px] text-muted-foreground">{pct} %</div>
                 </div>
               );
             })}
           </div>
-          {groups.map((g) => (
-            <div key={g.name}>
-              <div className="sticky left-0 flex items-center gap-2 border-b border-border bg-muted/40 px-3 py-1 text-xs font-semibold" style={{ width: 150 + span * CELL }}>
-                <i className="size-2.5 rounded-full" style={{ background: g.color }} /> {g.name} <span className="font-normal text-muted-foreground">({g.rooms.length})</span>
+          {activeRooms.map((room) => (
+            <div key={room.id} className="relative flex border-b border-border/60" style={{ height: ROW_H }}>
+              <div className="sticky left-0 z-10 flex w-[170px] shrink-0 flex-col justify-center border-r border-border bg-card px-4">
+                <span className="font-display text-lg font-semibold leading-tight">{room.number}</span>
+                <span className="truncate text-xs text-muted-foreground">{room.type_name}</span>
               </div>
-              {g.rooms.map((room) => (
-                <div key={room.id} className="relative flex h-10 border-b border-border/60">
-                  <div className="sticky left-0 z-10 flex w-[150px] shrink-0 items-center border-r border-border bg-card px-3 text-sm font-medium">{room.number}</div>
-                  <div className="relative" style={{ width: span * CELL }}>
-                    <div className="absolute inset-0 flex">
-                      {days.map((d) => (
-                        <button key={d} aria-label={`Réserver ${room.number} le ${fmtDate(d)}`} style={{ width: CELL }}
-                          className={cn('h-full shrink-0 border-r border-border/40 hover:bg-primary/10', d === today && 'bg-accent/20', [0, 6].includes(new Date(`${d}T00:00:00Z`).getUTCDay()) && 'bg-muted/30')}
-                          onClick={() => { setInitial({ room_id: room.id, arrival: d }); setNewOpen(true); }} />
-                      ))}
-                    </div>
-                    {visible.filter((r) => r.room_id === room.id).map((r) => {
-                      const { left, width } = bar(r);
-                      return (
-                        <button key={r.id} onClick={() => setDetail(r.id)} title={`${r.client_name} · ${fmtDate(r.arrival)} → ${fmtDate(r.departure)} · ${HOTEL_STATUS_LABELS[r.status]}`}
-                          className="absolute top-1 h-8 overflow-hidden rounded-md px-2 text-left text-xs font-medium text-white shadow-sm ring-1 ring-black/10 hover:brightness-110"
-                          style={{ left, width, background: STATUS_COLOR[r.status] }}>
-                          <span className="block truncate">{r.client_name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+              <div className="relative" style={{ width: span * CELL }}>
+                <div className="absolute inset-0 flex">
+                  {days.map((d) => (
+                    <button key={d} aria-label={`Réserver ${room.number} le ${fmtDate(d)}`} style={{ width: CELL }}
+                      className={cn('h-full shrink-0 border-r border-border/30 hover:bg-primary/10', d === today && 'bg-accent/20', [0, 6].includes(new Date(`${d}T00:00:00Z`).getUTCDay()) && d !== today && 'bg-muted/25')}
+                      onClick={() => { setInitial({ room_id: room.id, arrival: d }); setNewOpen(true); }} />
+                  ))}
                 </div>
-              ))}
+                {visible.filter((r) => r.room_id === room.id).map((r) => {
+                  const { left, width } = bar(r);
+                  const st = BAR_STYLE[r.status];
+                  return (
+                    <button key={r.id} onClick={() => setDetail(r.id)} title={`${r.client_name} · ${fmtDate(r.arrival)} → ${fmtDate(r.departure)} · ${HOTEL_STATUS_LABELS[r.status]}`}
+                      className="absolute overflow-hidden rounded-lg border px-2.5 py-1 text-left shadow-sm hover:brightness-105"
+                      style={{ left, width, top: 8, height: ROW_H - 16, background: st.background, color: st.color, borderColor: st.border, borderStyle: st.borderStyle ?? 'solid' }}>
+                      <span className="block truncate text-[13px] font-semibold leading-tight" style={{ textDecoration: st.textDecoration }}>{r.client_name}</span>
+                      <span className="block truncate text-[11px] leading-tight opacity-90">{r.nights} nuit{r.nights > 1 ? 's' : ''} · {r.status === 'checked_in' ? 'En séjour' : r.status === 'checked_out' ? 'Terminée' : HOTEL_STATUS_LABELS[r.status]}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ))}
-          {!rooms.isLoading && groups.length === 0 && <p className="p-8 text-center text-muted-foreground">Aucune chambre. Créez-en dans « Hôtel › Chambres (gestion) » ou chargez les données démo dans les réglages.</p>}
-          {days.includes(today) && <div className="pointer-events-none absolute bottom-0 top-0 z-[5] w-px bg-destructive/60" style={{ left: 150 + (daysBetween(start, today) + 0.5) * CELL }} />}
+          {!rooms.isLoading && activeRooms.length === 0 && <p className="p-8 text-center text-muted-foreground">Aucune chambre. Créez-en dans « Hôtel › Chambres (gestion) » ou chargez les données démo dans les réglages.</p>}
+          {days.includes(today) && <div className="pointer-events-none absolute bottom-0 top-0 z-[5] w-px bg-primary/50" style={{ left: LABEL_W + (daysBetween(start, today) + 0.5) * CELL }} />}
         </div>
       </div>
 
@@ -200,8 +202,8 @@ function ListDialog({ open, onOpenChange, settings, onOpen }: { open: boolean; o
         <DialogBody className="space-y-3">
           <div className="flex flex-wrap gap-2">{presets.map(([l, f]) => <Button key={l} size="sm" variant="outline" onClick={f}>{l}</Button>)}</div>
           <div className="flex flex-wrap items-end gap-2">
-            <Input type="date" className="h-10 w-40" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Du" />
-            <Input type="date" className="h-10 w-40" value={to} onChange={(e) => setTo(e.target.value)} aria-label="Au" />
+            <DateField value={from} onChange={setFrom} aria-label="Du" />
+            <DateField value={to} onChange={setTo} aria-label="Au" />
             <Input className="h-10 w-48" placeholder="Rechercher client, N°…" value={q} onChange={(e) => setQ(e.target.value)} />
             <Button onClick={() => from && to && from <= to ? setApplied({ from, to }) : toast.error('Période invalide')}>Charger</Button>
             <Button variant="outline" disabled={!rows.length} onClick={() => downloadCsv(`reservations_${applied.from}_${applied.to}.csv`, [['N°', 'Client', 'Chambre', 'Arrivée', 'Départ', 'Statut', 'Total net', 'Payé', 'Reste'], ...rows.map((r) => [r.ref, r.client_name, r.room_number, r.arrival, r.departure, HOTEL_STATUS_LABELS[r.status], r.net_amount, r.paid_amount, Math.max(0, r.balance)])])}>Exporter CSV</Button>

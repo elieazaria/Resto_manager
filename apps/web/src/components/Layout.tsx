@@ -13,6 +13,7 @@ import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { DeviceDialog } from './DeviceDialog';
 import { OutboxDialog } from './OutboxDialog';
 import { PrintHost } from './PrintHost';
+import { GlobalSearch } from './GlobalSearch';
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useAuth();
@@ -73,7 +74,7 @@ export function Layout() {
     <div className="space-y-1 border-t border-white/10 pt-3 text-ink-foreground/85">
       <div className="px-3 pb-2">
         <p className="truncate font-medium text-white">{user?.full_name}</p>
-        <Badge tone="warn" className="mt-1">{user && ROLE_LABELS[user.role]}</Badge>
+        <Badge tone="light" className="mt-1">{user && ROLE_LABELS[user.role]}</Badge>
       </div>
       {[{ i: Printer, l: 'Impression', f: () => setDevice(true) }, { i: KeyRound, l: 'Mot de passe', f: () => setPwd(true) }, { i: LogOut, l: 'Se déconnecter', f: doLogout }].map(({ i: I, l, f }) => (
         <button key={l} onClick={() => { setDrawer(false); f(); }} className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-[15px] hover:bg-white/5">
@@ -96,10 +97,11 @@ export function Layout() {
       <div className="flex min-w-0 flex-col">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur sm:px-5">
           <button className="rounded-md p-2 hover:bg-muted lg:hidden" onClick={() => setDrawer(true)} aria-label="Ouvrir le menu"><Menu className="size-5" /></button>
-          <p className="font-display text-lg font-semibold lg:hidden">Resto <span className="text-primary">Manager</span></p>
+          <p className="hidden font-display text-lg font-semibold sm:block lg:hidden">Resto <span className="text-primary">Manager</span></p>
+          <GlobalSearch />
           <div className="ml-auto flex items-center gap-2">
             {pending.length > 0 && (
-              <button onClick={() => setBox(true)} className={cn('rounded-full px-3 py-1 text-xs font-medium', stuck ? 'bg-destructive/12 text-destructive' : 'bg-accent/40 text-[#5c3d00]')}>
+              <button onClick={() => setBox(true)} className={cn('rounded-full px-3 py-1 text-xs font-medium', stuck ? 'bg-destructive/12 text-destructive' : 'bg-accent/40 text-[#0d3b5c]')}>
                 {stuck ? `${stuck} refusée(s)` : `${pending.length} en attente d'envoi`}
               </button>
             )}

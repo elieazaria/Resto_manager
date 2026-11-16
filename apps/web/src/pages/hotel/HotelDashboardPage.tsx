@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { HOTEL_PAYMENT_LABELS, HOTEL_STATUS_LABELS, ROOM_LIVE_LABELS, type HotelDashboardDto, type HotelResStatus, type RoomLiveStatus } from '@resto/shared';
+import { BedDouble, CalendarCheck, CalendarX, Coins, HandCoins, Waves, Wallet, ClipboardList, type LucideIcon } from 'lucide-react';
+import { StatCard, type Tone } from '@/components/ui/stat-card';
 import { Card } from '@/components/ui/card';
 import { PageHeader } from '@/components/PageHeader';
 import { api } from '@/lib/api';
@@ -8,9 +10,7 @@ import { compactAr, fmtDate, money } from '@/lib/format';
 import { LIVE_COLOR, STATUS_COLOR } from '@/lib/hotel';
 
 const MONTHS = ['Janv', 'Févr', 'Mars', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc'];
-const Kpi = ({ label, value, hint }: { label: string; value: string; hint?: string }) => (
-  <Card className="px-4 py-3.5"><p className="text-sm text-muted-foreground">{label}</p><p className="num mt-1 font-display text-2xl font-semibold">{value}</p>{hint && <p className="text-xs text-muted-foreground">{hint}</p>}</Card>
-);
+const Kpi = ({ label, value, hint, tone, icon }: { label: string; value: string; hint?: string; tone: Tone; icon: LucideIcon }) => <StatCard label={label} value={value} hint={hint} tone={tone} icon={icon} />;
 
 export default function HotelDashboardPage() {
   const q = useQuery({ queryKey: ['hotel', 'dashboard'], queryFn: () => api<HotelDashboardDto>('/hotel/dashboard'), refetchInterval: 30_000 });
@@ -22,16 +22,16 @@ export default function HotelDashboardPage() {
     <div className="space-y-5">
       <PageHeader title="Tableau de bord hôtel" description={`Situation au ${fmtDate(d.date)}`} />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="Taux d’occupation" value={`${d.occupancy_percent} %`} hint={`${d.occupied_today} / ${d.units_total} chambres`} />
-        <Kpi label="Arrivées aujourd’hui" value={String(d.arrivals_today)} hint={`${d.upcoming_7d} dans les 7 jours`} />
-        <Kpi label="Départs aujourd’hui" value={String(d.departures_today)} />
-        <Kpi label="Reste à encaisser" value={money(d.outstanding_total)} />
-        <Kpi label="CA du mois" value={money(d.revenue_month)} />
-        <Kpi label="Encaissé ce mois" value={money(d.collected_month)} />
-        <Kpi label="Encaissé au total" value={money(d.collected_total)} />
-        <Kpi label="Ventes sur place (jour)" value={money(d.walkin_today)} hint="Piscine, clients externes" />
-        <Kpi label="Ventes sur place (mois)" value={money(d.walkin_month)} />
-        <Kpi label="Réservations actives" value={String(d.status_counts.confirmed + d.status_counts.checked_in + d.status_counts.option)} />
+        <Kpi tone="green" icon={BedDouble} label="Taux d’occupation" value={`${d.occupancy_percent} %`} hint={`${d.occupied_today} / ${d.units_total} chambres`} />
+        <Kpi tone="blue" icon={CalendarCheck} label="Arrivées aujourd’hui" value={String(d.arrivals_today)} hint={`${d.upcoming_7d} dans les 7 jours`} />
+        <Kpi tone="violet" icon={CalendarX} label="Départs aujourd’hui" value={String(d.departures_today)} />
+        <Kpi tone="red" icon={HandCoins} label="Reste à encaisser" value={money(d.outstanding_total)} />
+        <Kpi tone="green" icon={Coins} label="CA du mois" value={money(d.revenue_month)} />
+        <Kpi tone="violet" icon={Wallet} label="Encaissé ce mois" value={money(d.collected_month)} />
+        <Kpi tone="blue" icon={Wallet} label="Encaissé au total" value={money(d.collected_total)} />
+        <Kpi tone="green" icon={Waves} label="Ventes sur place (jour)" value={money(d.walkin_today)} hint="Piscine, clients externes" />
+        <Kpi tone="violet" icon={Waves} label="Ventes sur place (mois)" value={money(d.walkin_month)} />
+        <Kpi tone="blue" icon={ClipboardList} label="Réservations actives" value={String(d.status_counts.confirmed + d.status_counts.checked_in + d.status_counts.option)} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

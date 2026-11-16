@@ -102,7 +102,9 @@ export function StockItemsPage() {
       { name: 'unit', label: 'Unité de stock', type: 'text', placeholder: 'g, ml, pièce…' },
       { name: 'min_qty', label: 'Seuil d’alerte (unité de stock)', type: 'number' },
       { name: 'purchase_unit', label: 'Unité d’achat', type: 'text', placeholder: 'sachet, kg, boîte…' },
-      { name: 'purchase_factor', label: 'Facteur de conversion', type: 'number', help: '1 unité d’achat = combien d’unités de stock ?' },
+      { name: 'purchase_factor', label: 'Facteur de conversion', type: 'number', help: '1 unité d’achat = combien d’unités de stock ?',
+        warn: (v) => String(v.unit ?? '').trim().toLowerCase() === String(v.purchase_unit ?? '').trim().toLowerCase() && Number(v.purchase_factor) !== 1
+          ? `L’unité d’achat et l’unité de stock sont identiques (${v.unit}) : le facteur doit être 1, pas ${v.purchase_factor}. Sinon les prix et les quantités sont faussés.` : null },
       { name: 'is_active', label: 'Actif', type: 'checkbox' },
     ],
     schema: stockItemSchema,

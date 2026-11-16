@@ -22,7 +22,7 @@ export async function pdfSalesReport(inp: SalesPdfInput) {
   const { d, autoTable } = await doc('p');
   const W = d.internal.pageSize.getWidth();
   const r = inp.report;
-  const green: [number, number, number] = [22, 101, 52];
+  const green: [number, number, number] = [31, 111, 163];
   let y = 16;
   d.setFontSize(16).setFont('helvetica', 'bold').text(inp.restaurant || 'Restaurant', 14, y);
   d.setFontSize(13).text('Statistiques de ventes', W - 14, y, { align: 'right' });
@@ -107,7 +107,7 @@ export async function pdfSalesReport(inp: SalesPdfInput) {
       foot: [['Total', ar(ta), ar(tb), sign(tb - ta), pctTxt(tb, ta), ''], ['Tickets', fmtQty(oa), fmtQty(ob), String(ob - oa), pctTxt(ob, oa), ''], ['Ticket moyen', ar(oa ? Math.round(ta / oa) : 0), ar(ob ? Math.round(tb / ob) : 0), '', '', '']],
       footStyles: { fillColor: [240, 240, 240], textColor: 20 },
       columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
-      didParseCell: (h: any) => { if (h.section === 'body' && [3, 4].includes(h.column.index)) h.cell.styles.textColor = String(h.cell.raw).startsWith('-') ? [185, 28, 28] : [22, 101, 52]; },
+      didParseCell: (h: any) => { if (h.section === 'body' && [3, 4].includes(h.column.index)) h.cell.styles.textColor = String(h.cell.raw).startsWith('-') ? [185, 28, 28] : [31, 111, 163]; },
     });
   }
 

@@ -97,7 +97,7 @@ export async function loadReservations(q: Queryable, f: Filter = {}): Promise<Ho
   const sql = `select r.id, r.ref, r.group_id, r.client_id, c.full_name as client_name, c.phone as client_phone,
       r.room_id, rm.number as room_number, ty.name as room_type_name, ty.color as room_color,
       r.arrival, r.departure, (r.departure - r.arrival) as nights, r.adults, r.children, r.price_per_night,
-      r.tourist_tax, r.discount_percent, r.discount_amount, r.status, r.note, r.cancel_reason,
+      r.tourist_tax, r.discount_percent, r.discount_amount, r.status, r.note, r.cancel_reason, r.checkin_time, r.checkout_time,
       r.checked_in_at, r.checked_out_at, r.is_demo, r.created_at
     from hotel_reservations r
     join hotel_clients c on c.id = r.client_id
@@ -191,9 +191,9 @@ async function insertReservation(q: Queryable, user: AuthUser | null, c: Omit<Cr
   const ref = await nextRef(q, x.tz, settings.ref_prefix);
   const { rows } = await q.query<{ id: string }>(
     `insert into hotel_reservations (ref, group_id, client_id, room_id, arrival, departure, adults, children, price_per_night,
-       discount_percent, discount_amount, tourist_tax, status, note, is_demo, created_by, created_at)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, coalesce($17::timestamptz, now())) returning id`,
-    [ref, groupId, c.client_id, c.room_id, c.arrival, c.departure, c.adults, c.children, c.price_per_night, c.discount_percent, c.discount_amount, tax, c.status, c.note || null, !!x.demo, user?.id ?? null, createdAt ?? null],
+       discount_percent, discount_amount, tourist_tax, status, note, is_demo, created_by, created_at, checkin_time, checkout_time)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, coalesce($17::timestamptz, now()), $18, $19) returning id`,
+    [ref, groupId, c.client_id, c.room_id, c.arrival, c.departure, c.adults, c.children, c.price_per_night, c.discount_percent, c.discount_amount, tax, c.status, c.note || null, !!x.demo, user?.id ?? null, createdAt ?? null, c.checkin_time || null, c.checkout_time || null],
   );
   const id = rows[0]!.id;
   for (const e of c.extras) {
@@ -245,6 +245,8 @@ export async function updateReservation(q: Queryable, user: AuthUser, id: string
     discount_amount: input.discount_amount ?? cur.discount_amount,
     note: input.note === undefined ? cur.note : input.note || null,
     client_id: input.client_id ?? cur.client_id,
+    checkin_time: input.checkin_time === undefined ? cur.checkin_time : input.checkin_time || null,
+    checkout_time: input.checkout_time === undefined ? cur.checkout_time : input.checkout_time || null,
   };
   if (next.departure <= next.arrival) throw badRequest('Le départ doit être après l’arrivée');
   await assertAvailable(q, next.room_id, next.arrival, next.departure, id);
@@ -256,8 +258,8 @@ export async function updateReservation(q: Queryable, user: AuthUser, id: string
   if (next.discount_amount > gross) throw badRequest('La remise dépasse le total du séjour');
   await q.query(
     `update hotel_reservations set client_id=$2, room_id=$3, arrival=$4, departure=$5, adults=$6, children=$7, price_per_night=$8,
-       discount_percent=$9, discount_amount=$10, tourist_tax=$11, note=$12, updated_at=now() where id=$1`,
-    [id, next.client_id, next.room_id, next.arrival, next.departure, next.adults, next.children, next.price_per_night, next.discount_percent, next.discount_amount, tax, next.note],
+       discount_percent=$9, discount_amount=$10, tourist_tax=$11, note=$12, checkin_time=$13, checkout_time=$14, updated_at=now() where id=$1`,
+    [id, next.client_id, next.room_id, next.arrival, next.departure, next.adults, next.children, next.price_per_night, next.discount_percent, next.discount_amount, tax, next.note, next.checkin_time, next.checkout_time],
   );
   if (input.extras) {
     await q.query('delete from hotel_reservation_extras where reservation_id = $1', [id]);
@@ -328,6 +330,34 @@ export async function addPayment(q: Queryable, user: AuthUser, id: string, input
   await q.query(`insert into hotel_payments (reservation_id, amount, method, kind, paid_on, note, created_by) values ($1,$2,$3,$4,coalesce($5::date,$6::date),$7,$8)`, [id, amount, input.method, input.kind, input.paid_on ?? null, todayInTz(tz), input.note || null, user.id]);
   await audit(q, user, 'hotel.payment.add', 'hotel_reservation', id, { amount, method: input.method });
   return getReservation(q, id);
+}
+
+/** Totaux d'un groupe : une seule facture logique pour toutes les chambres. */
+export async function getGroup(q: Queryable, groupId: string) {
+  const reservations = await loadReservations(q, { groupId });
+  if (!reservations.length) throw notFound('Groupe introuvable');
+  const live = reservations.filter((r) => r.status !== 'cancelled');
+  const billed = live.reduce((s, r) => s + r.net_amount, 0);
+  const paid = reservations.reduce((s, r) => s + r.paid_amount, 0);
+  return { group_id: groupId, reservations, totals: { billed, paid, balance: Math.max(0, billed - paid), surplus: Math.max(0, paid - billed) } };
+}
+
+/** Paiement unique pour tout le groupe, réparti automatiquement sur les chambres qui ont un reste à payer. */
+export async function addGroupPayment(q: Queryable, user: AuthUser, groupId: string, input: z.infer<typeof hotelPaymentSchema>, tz: string) {
+  const g = await getGroup(q, groupId);
+  const amount = Math.abs(input.amount);
+  if (input.kind === 'refund') throw badRequest('Pour un remboursement, ouvrez la chambre concernée');
+  if (amount > g.totals.balance) throw conflict(`Le montant dépasse le reste à payer du groupe (${g.totals.balance} Ar)`, 'OVERPAYMENT', { balance: g.totals.balance });
+  let left = amount;
+  for (const r of g.reservations) {
+    if (left <= 0) break;
+    if (r.status === 'cancelled' || r.balance <= 0) continue;
+    const part = Math.min(left, r.balance);
+    await q.query(`insert into hotel_payments (reservation_id, amount, method, kind, paid_on, note, created_by) values ($1,$2,$3,$4,coalesce($5::date,$6::date),$7,$8)`, [r.id, part, input.method, input.kind, input.paid_on ?? null, todayInTz(tz), input.note || 'Paiement groupé', user.id]);
+    left -= part;
+  }
+  await audit(q, user, 'hotel.payment.group', 'hotel_reservation', g.reservations[0]!.id, { amount, method: input.method, group_id: groupId });
+  return getGroup(q, groupId);
 }
 
 export async function deletePayment(q: Queryable, user: AuthUser, id: string, paymentId: string) {

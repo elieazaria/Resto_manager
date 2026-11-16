@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from '@/components/ui/dialog';
 import { Input, Label, Select } from '@/components/ui/input';
+import { DateField } from '@/components/ui/date-field';
 import { DataTable } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
 import { api } from '@/lib/api';
@@ -17,7 +18,7 @@ import { printTicket } from '@/lib/print';
 import { errorMessage } from '@/lib/utils';
 
 const STATUS = {
-  open: <Badge tone="warn">En cours</Badge>,
+  open: <Badge tone="info">En cours</Badge>,
   paid: <Badge tone="ok">Payée</Badge>,
   cancelled: <Badge tone="danger">Annulée</Badge>,
 };
@@ -58,8 +59,8 @@ export default function OrdersPage({ mode }: { mode: 'today' | 'sales' }) {
       />
       {mode === 'sales' && (
         <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1.5"><Label htmlFor="from">Du</Label><Input id="from" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label htmlFor="to">Au</Label><Input id="to" type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="from">Du</Label><DateField id="from" value={from} max={to} onChange={setFrom} /></div>
+          <div className="space-y-1.5"><Label htmlFor="to">Au</Label><DateField id="to" value={to} min={from} onChange={setTo} /></div>
           <div className="space-y-1.5"><Label htmlFor="st">Statut</Label>
             <Select id="st" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Tous</option><option value="paid">Payées</option><option value="open">En cours</option><option value="cancelled">Annulées</option></Select>
           </div>

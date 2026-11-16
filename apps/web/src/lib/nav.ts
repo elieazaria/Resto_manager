@@ -1,4 +1,4 @@
-import { BarChart3, History, TrendingUp, BedDouble, CalendarRange, Hotel, KeyRound, Layers, Percent, Settings2, ConciergeBell, Waves, UserRound, BookOpen, Boxes, ClipboardList, Receipt, Settings, ShoppingBasket, Store, Tags, Truck, Users, UtensilsCrossed, Wallet, Grid2x2, ShoppingCart, type LucideIcon } from 'lucide-react';
+import { BarChart3, History, TrendingUp, BedDouble, CalendarRange, Hotel, KeyRound, Layers, Percent, Settings2, ConciergeBell, DoorOpen, CalendarDays, Waves, UserRound, BookOpen, Boxes, ClipboardList, Receipt, Settings, ShoppingBasket, Store, Tags, Truck, Users, UtensilsCrossed, Wallet, Grid2x2, ShoppingCart, type LucideIcon } from 'lucide-react';
 import type { Permission } from '@resto/shared';
 
 export interface NavItem {
@@ -25,6 +25,8 @@ export const NAV: NavItem[] = [
   { to: '/profitability', label: 'Rentabilité des menus', icon: TrendingUp, perm: 'admin', group: 'Finances' },
   { to: '/expenses', label: 'Dépenses et charges', icon: Wallet, perm: 'admin', group: 'Finances' },
   { to: '/hotel/planning', label: 'Planning', icon: CalendarRange, perm: 'admin', group: 'Hôtel' },
+  { to: '/hotel/arrivals', label: 'Arrivées et départs', icon: DoorOpen, perm: 'admin', group: 'Hôtel' },
+  { to: '/hotel/reservations', label: 'Réservations', icon: CalendarDays, perm: 'admin', group: 'Hôtel' },
   { to: '/hotel/dashboard', label: 'Tableau de bord hôtel', icon: Hotel, perm: 'admin', group: 'Hôtel' },
   { to: '/hotel/rooms', label: 'Chambres en direct', icon: KeyRound, perm: 'admin', group: 'Hôtel' },
   { to: '/hotel/walkins', label: 'Ventes sur place (piscine)', icon: Waves, perm: 'admin', group: 'Hôtel' },

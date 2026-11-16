@@ -29,32 +29,44 @@
   --radius-lg: 14px;
 }
 
-/* Identité : vert ravenala (encre) + jaune vanille/safran, sur fond pierre claire. */
+/* Identité : menu et actions en bleu ; fond des pages en gris clair et blanc. Palette bleue — #FFFFFF, #E4F1F7, #7FB7D6, #1F6FA3, #0D3B5C. */
 :root {
-  --background: #f4f6f0;
-  --foreground: #14231c;
-  --card: #ffffff;
-  --muted: #e8ece2;
-  --muted-foreground: #55655b;
-  --border: #d6dccf;
-  --input: #c4ccbb;
-  --ring: #1f7a5a;
-  --primary: #17614a;
-  --primary-foreground: #f4f6f0;
-  --accent: #f2b636;
-  --accent-foreground: #2a1e00;
+  --color-1: #ffffff;
+  --color-2: #e4f1f7;
+  --color-3: #7fb7d6;
+  --color-4: #1f6fa3;
+  --color-5: #0d3b5c;
+
+  --background: #f3f4f6;
+  --foreground: var(--color-5);
+  --card: var(--color-1);
+  --muted: #e5e7eb;
+  --muted-foreground: #5b6472;
+  --border: #d9dde3;
+  --input: #c3c9d2;
+  --ring: var(--color-4);
+  --primary: var(--color-4);
+  --primary-foreground: #ffffff;
+  --accent: var(--color-3);
+  --accent-foreground: var(--color-5);
   --destructive: #b42318;
-  --ink: #0f2a21;
-  --ink-foreground: #dfe8e0;
-  --ok: #17614a;
+  --ink: var(--color-5);
+  --ink-foreground: var(--color-2);
+  --ok: var(--color-4);
   --warn: #a15c00;
 
-  /* Séries de graphiques (palette catégorielle validée, ordre fixe) */
-  --series-1: #2a78d6;
+  /* Séries de graphiques */
+  --series-1: #1f6fa3;
   --series-2: #eb6834;
-  --series-3: #1baf7a;
+  --series-3: #7fb7d6;
   --series-4: #eda100;
-  --series-5: #e87ba4;
+  --series-5: #0d3b5c;
+
+  /* Accents des cartes de tableau de bord (famille bleue + rouge pour les sorties) */
+  --tone-green: #1f6fa3;
+  --tone-violet: #0d3b5c;
+  --tone-blue: #3f8fbf;
+  --tone-red: #d6453d;
   color-scheme: light;
 }
 

@@ -1,0 +1,2 @@
+alter table hotel_reservations add column if not exists checkin_time text check (checkin_time ~ '^\d{2}:\d{2}$');
+alter table hotel_reservations add column if not exists checkout_time text check (checkout_time ~ '^\d{2}:\d{2}$');

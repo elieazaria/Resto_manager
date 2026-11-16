@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Label, Select } from '@/components/ui/input';
+import { DateField } from '@/components/ui/date-field';
 import { NumberField } from '@/components/ui/number-field';
 import { api } from '@/lib/api';
 import { fmtDate, money } from '@/lib/format';
@@ -68,7 +69,7 @@ export default function WalkinsPage() {
 
       <Card className="p-4">
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-          <div className="space-y-1"><Label>Jour</Label><Input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} /></div>
+          <div className="space-y-1"><Label>Jour</Label><DateField value={day} onChange={setDay} /></div>
           <p className="num font-display text-xl font-semibold">{money(total)}</p>
         </div>
         {(list.data ?? []).length === 0 ? <p className="text-sm text-muted-foreground">Aucune vente le {fmtDate(day)}.</p> : (

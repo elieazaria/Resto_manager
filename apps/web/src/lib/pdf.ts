@@ -37,7 +37,7 @@ export async function pdfReservations(rows: HotelReservationDto[], s: HotelSetti
   const { d, autoTable } = await doc('l');
   const y = header(d, s, 'Liste des réservations', period);
   autoTable(d, {
-    startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [22, 101, 52] },
+    startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [31, 111, 163] },
     head: [['N°', 'Client', 'Chambre', 'Arrivée', 'Départ', 'Nuits', 'Statut', 'Total net', 'Payé', 'Reste']],
     body: rows.map((r) => [r.ref, r.client_name, r.room_number, fmtDate(r.arrival), fmtDate(r.departure), r.nights, HOTEL_STATUS_LABELS[r.status], ar(r.net_amount), ar(r.paid_amount), ar(Math.max(0, r.balance))]),
     foot: [['', '', '', '', '', '', 'Total', ar(rows.reduce((t, r) => t + r.net_amount, 0)), ar(rows.reduce((t, r) => t + r.paid_amount, 0)), ar(rows.reduce((t, r) => t + Math.max(0, r.balance), 0))]],
@@ -52,11 +52,11 @@ export async function pdfReservations(rows: HotelReservationDto[], s: HotelSetti
 export async function pdfPlanning(rooms: HotelRoomDto[], rows: HotelReservationDto[], days: string[], s: HotelSettings) {
   const { d, autoTable } = await doc('l');
   const y = header(d, s, 'Planning des réservations', `${fmtDate(days[0]!)} au ${fmtDate(days[days.length - 1]!)}`);
-  const colors: Record<string, [number, number, number]> = { option: [245, 158, 11], confirmed: [22, 163, 74], checked_in: [37, 99, 235], checked_out: [156, 163, 175] };
+  const colors: Record<string, [number, number, number]> = { option: [127, 183, 214], confirmed: [31, 111, 163], checked_in: [13, 59, 92], checked_out: [156, 163, 175] };
   const cell = (room: string, day: string) => rows.find((r) => r.room_id === room && r.status !== 'cancelled' && r.arrival <= day && r.departure > day);
   autoTable(d, {
     startY: y, styles: { fontSize: 6, cellPadding: 0.8, halign: 'center', minCellHeight: 6 },
-    headStyles: { fillColor: [22, 101, 52] },
+    headStyles: { fillColor: [31, 111, 163] },
     columnStyles: { 0: { halign: 'left', cellWidth: 24, fontStyle: 'bold' } },
     head: [['Chambre', ...days.map((x) => x.slice(8) + '/' + x.slice(5, 7))]],
     body: rooms.map((r) => [r.number, ...days.map(() => '')]),
@@ -86,12 +86,12 @@ export async function pdfInvoice(r: HotelReservationDto, s: HotelSettings) {
   let y = header(d, s, 'FACTURE', r.ref);
   d.setFontSize(10).setFont('helvetica', 'bold').text('Client', 14, y + 4);
   d.setFont('helvetica', 'normal').text([r.client_name, r.client_phone ?? ''].filter(Boolean), 14, y + 9);
-  d.text([`Chambre : ${r.room_number} (${r.room_type_name})`, `Séjour : ${fmtDate(r.arrival)} au ${fmtDate(r.departure)} (${r.nights} nuit${r.nights > 1 ? 's' : ''})`, `Personnes : ${r.adults} adulte(s), ${r.children} enfant(s)`], 110, y + 4);
+  d.text([`Chambre : ${r.room_number} (${r.room_type_name})`, `Séjour : ${fmtDate(r.arrival)} au ${fmtDate(r.departure)} (${r.nights} nuit${r.nights > 1 ? 's' : ''})`, `Personnes : ${r.adults} adulte(s), ${r.children} enfant(s)`, `Arrivée ${r.checkin_time ?? s.checkin_time} - Départ ${r.checkout_time ?? s.checkout_time}`], 110, y + 4);
   y += 24;
   const lines: (string | number)[][] = [[`Hébergement – chambre ${r.room_number}`, r.nights, ar(r.price_per_night), ar(r.lodging_amount)]];
   for (const e of r.extras) lines.push([e.label + (e.multiplier > 1 ? ` (× ${e.multiplier} nuits)` : ''), e.quantity, ar(e.unit_price), ar(e.amount)]);
   if (r.tourist_tax) lines.push(['Taxe de séjour', r.adults * r.nights, '', ar(r.tourist_tax)]);
-  autoTable(d, { startY: y, head: [['Désignation', 'Qté', 'Prix unitaire', 'Montant']], body: lines, styles: { fontSize: 9 }, headStyles: { fillColor: [22, 101, 52] }, columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } } });
+  autoTable(d, { startY: y, head: [['Désignation', 'Qté', 'Prix unitaire', 'Montant']], body: lines, styles: { fontSize: 9 }, headStyles: { fillColor: [31, 111, 163] }, columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } } });
   y = (d as any).lastAutoTable.finalY + 4;
   const tot: string[][] = [['Total', ar(r.total_amount)]];
   if (r.discount_amount) tot.push([`Remise${r.discount_percent ? ` (${r.discount_percent} %)` : ''}`, '- ' + ar(r.discount_amount)]);
@@ -112,7 +112,7 @@ export async function pdfStatement(clientName: string, rows: HotelReservationDto
   const y = header(d, s, 'RELEVÉ DE COMPTE', clientName);
   const live = rows.filter((r) => r.status !== 'cancelled');
   autoTable(d, {
-    startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [22, 101, 52] },
+    startY: y, styles: { fontSize: 8 }, headStyles: { fillColor: [31, 111, 163] },
     head: [['N°', 'Chambre', 'Séjour', 'Net', 'Payé', 'Reste']],
     body: live.map((r) => [r.ref, r.room_number, `${fmtDate(r.arrival)} au ${fmtDate(r.departure)}`, ar(r.net_amount), ar(r.paid_amount), ar(Math.max(0, r.balance))]),
     foot: [['', '', 'Total', ar(live.reduce((t, r) => t + r.net_amount, 0)), ar(live.reduce((t, r) => t + r.paid_amount, 0)), ar(live.reduce((t, r) => t + Math.max(0, r.balance), 0))]],

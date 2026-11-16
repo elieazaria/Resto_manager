@@ -178,3 +178,38 @@ describe('ventes sur place (entrée piscine)', () => {
     expect((await call('DELETE', `/api/hotel/walkins/${w.json.id}`)).status).toBe(404);
   });
 });
+
+describe('heures d’arrivée / départ par réservation', () => {
+  it('enregistre, modifie et remet par défaut', async () => {
+    const rooms = (await call('GET', '/api/hotel/rooms')).json;
+    const r = (await call('POST', '/api/hotel/reservations', { new_client: { full_name: 'Heures' }, room_id: rooms[12].id, arrival: day(120), departure: day(121), price_per_night: 100000, checkin_time: '13:00', checkout_time: '11:00' })).json;
+    expect(r.checkin_time).toBe('13:00');
+    expect(r.checkout_time).toBe('11:00');
+    const u = (await call('PATCH', `/api/hotel/reservations/${r.id}`, { checkout_time: '15:30' })).json;
+    expect(u.checkout_time).toBe('15:30');
+    expect(u.checkin_time).toBe('13:00');
+    const d = (await call('PATCH', `/api/hotel/reservations/${r.id}`, { checkin_time: null })).json;
+    expect(d.checkin_time).toBeNull();
+  });
+});
+
+describe('réservation groupée : total et paiement unique', () => {
+  it('paiement réparti sur les chambres, refus du dépassement', async () => {
+    const rooms = (await call('GET', '/api/hotel/rooms')).json;
+    const g = (await call('POST', '/api/hotel/reservations/group', { new_client: { full_name: 'Groupe Test' }, arrival: day(200), departure: day(201), rooms: [{ room_id: rooms[0].id, price_per_night: 150000 }, { room_id: rooms[1].id, price_per_night: 150000 }], extras: [{ label: 'Matelas', unit_price: 20000, quantity: 1, multiplier: 1 }] })).json;
+    const gid = g[0].group_id;
+    let t = (await call('GET', `/api/hotel/groups/${gid}`)).json.totals;
+    const total = g.reduce((x: number, r: any) => x + r.net_amount, 0);
+    expect(t.billed).toBe(total);
+    expect(t.balance).toBe(total);
+    expect((await call('POST', `/api/hotel/groups/${gid}/payments`, { amount: total + 1, method: 'cash' })).status).toBe(409);
+    const p = await call('POST', `/api/hotel/groups/${gid}/payments`, { amount: 200000, method: 'mvola' });
+    expect(p.status).toBe(201);
+    t = p.json.totals;
+    expect(t.paid).toBe(200000);
+    expect(t.balance).toBe(total - 200000);
+    const p2 = await call('POST', `/api/hotel/groups/${gid}/payments`, { amount: total - 200000, method: 'cash' });
+    expect(p2.json.totals.balance).toBe(0);
+    expect(p2.json.reservations.every((r: any) => r.balance === 0)).toBe(true);
+  });
+});

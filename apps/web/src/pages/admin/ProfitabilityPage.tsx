@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Select } from '@/components/ui/input';
+import { DateField } from '@/components/ui/date-field';
 import { PageHeader } from '@/components/PageHeader';
 import { api } from '@/lib/api';
 import { fmtQty, money, shiftDate, todayStr } from '@/lib/format';
@@ -51,8 +52,8 @@ export default function ProfitabilityPage() {
         {([['Aujourd’hui', today, today], ['7 jours', shiftDate(today, -6), today], ['Ce mois', `${ym}-01`, today], ['Mois dernier', `${shiftDate(`${ym}-01`, -1).slice(0, 7)}-01`, shiftDate(`${ym}-01`, -1)], ['Cette année', `${today.slice(0, 4)}-01-01`, today]] as const).map(([l, f, t]) => (
           <Button key={l} size="sm" variant={from === f && to === t ? 'default' : 'outline'} onClick={() => preset(f, t)}>{l}</Button>
         ))}
-        <Input type="date" className="h-9 w-38" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} aria-label="Du" />
-        <Input type="date" className="h-9 w-38" value={to} onChange={(e) => e.target.value && setTo(e.target.value)} aria-label="Au" />
+        <DateField value={from} onChange={setFrom} aria-label="Du" />
+        <DateField value={to} onChange={setTo} aria-label="Au" />
         <Select className="h-9 w-auto" value={basis} onChange={(e) => setBasis(e.target.value as CostBasis)} aria-label="Base du coût">
           <option value="average">Coût moyen pondéré des achats</option><option value="last">Dernier prix d’achat</option>
         </Select>
@@ -79,7 +80,7 @@ export default function ProfitabilityPage() {
               <Fragment key={r.id}>
                 <tr className="cursor-pointer hover:bg-muted/40" onClick={() => setOpen(open === r.id ? null : r.id)}>
                   <td className="pl-3">{open === r.id ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}</td>
-                  <td className="px-3 py-2"><b>{r.name}</b> <span className="text-xs text-muted-foreground">{r.category_name}{r.kind === 'resale' ? ' · revendu' : ''}</span> {r.missing_cost && <Badge tone="warn">Coût incomplet</Badge>}</td>
+                  <td className="px-3 py-2"><b>{r.name}</b> <span className="text-xs text-muted-foreground">{r.category_name}{r.kind === 'resale' ? ' · revendu' : ''}</span> {r.missing_cost && <Badge tone="danger">Coût incomplet</Badge>} {r.lines.some((l) => l.factor_warning) && <Badge tone="danger">Facteur à vérifier</Badge>}</td>
                   <td className="num px-3 py-2 text-right">{money(r.price)}</td>
                   <td className="num px-3 py-2 text-right">{money(r.cost)}</td>
                   <td className={cn('num px-3 py-2 text-right font-semibold', tone(r))}>{money(r.margin)}</td>
@@ -98,6 +99,7 @@ export default function ProfitabilityPage() {
                         ))}</tbody>
                       </table>
                     )}
+                    {r.lines.filter((l) => l.factor_warning).map((l) => <p key={l.stock_item_id} className="mt-2 rounded bg-accent/30 px-2 py-1 text-xs text-[#0d3b5c]" role="alert">⚠ {l.factor_warning}</p>)}
                     <p className="mt-2 text-xs text-muted-foreground">Prix {money(r.price)} − coût {money(r.cost)} = bénéfice {money(r.margin)} par portion (coût matières = {r.cost_percent} % du prix). CA période : {money(r.revenue)}.</p>
                   </td></tr>
                 )}

@@ -27,6 +27,8 @@ import { idParam, registerCrud } from '../crud.js';
 import { notFound } from '../errors.js';
 import {
   addPayment,
+  addGroupPayment,
+  getGroup,
   addExtra,
   addWalkin,
   deleteWalkin,
@@ -183,6 +185,13 @@ export function hotelRoutes(app: FastifyInstance, ctx: Ctx) {
     return reply.status(204).send();
   });
 
+  /* Groupes : totaux et paiement unique réparti sur les chambres */
+  app.get('/hotel/groups/:id', admin, async (req) => getGroup(ctx.db, idParam(req)));
+  app.post('/hotel/groups/:id/payments', admin, async (req, reply) => {
+    const b = hotelPaymentSchema.parse(req.body);
+    return reply.status(201).send(await ctx.db.tx((q) => addGroupPayment(q, req.user, idParam(req), b, tz)));
+  });
+
   /* Prix dynamique */
   app.get('/hotel/quote', admin, async (req) => {
     const b = z.object({ room_id: idSchema, arrival: dateSchema, departure: dateSchema }).parse(req.query);
@@ -201,8 +210,10 @@ export function hotelRoutes(app: FastifyInstance, ctx: Ctx) {
       reservations,
       totals: {
         billed: live.reduce((s, r) => s + r.net_amount, 0),
-        paid: reservations.reduce((s, r) => s + r.paid_amount, 0),
-        balance: live.reduce((s, r) => s + Math.max(0, r.balance), 0),
+        paid: live.reduce((s, r) => s + r.paid_amount, 0),
+        /** Sommes encaissées sur des réservations annulées (à rembourser ou à reporter). */
+        paid_on_cancelled: reservations.filter((r) => r.status === 'cancelled').reduce((s, r) => s + r.paid_amount, 0),
+        balance: Math.max(0, live.reduce((s, r) => s + r.net_amount, 0) - live.reduce((s, r) => s + r.paid_amount, 0)),
       },
     };
   });
