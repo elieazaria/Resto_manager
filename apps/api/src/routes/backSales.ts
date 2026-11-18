@@ -22,7 +22,10 @@ export function backSalesRoutes(app: FastifyInstance, ctx: Ctx) {
       if (items.length !== ids.length) throw badRequest('Plat introuvable');
       const price = new Map(items.map((i) => [i.id, i]));
       const total = b.lines.reduce((s, l) => s + price.get(l.menu_item_id)!.price * l.quantity, 0);
-      const table = (await q.query<{ id: string }>('select id from restaurant_tables order by is_active desc, sort_order limit 1')).rows[0];
+      const table = b.table_id
+        ? (await q.query<{ id: string }>('select id from restaurant_tables where id = $1', [b.table_id])).rows[0]
+        : (await q.query<{ id: string }>('select id from restaurant_tables order by is_active desc, sort_order limit 1')).rows[0];
+      if (b.table_id && !table) throw badRequest('Table introuvable');
       if (!table) throw badRequest('Créez au moins une table avant de saisir des ventes');
 
       // 12 h 00, heure du restaurant, le jour choisi

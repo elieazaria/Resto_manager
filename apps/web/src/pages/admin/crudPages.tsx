@@ -159,14 +159,15 @@ export function ExpensesPage() {
   const cfg: CrudConfig<any> = {
     title: 'Dépenses et charges', singular: 'Dépense', endpoint: '/expenses', queryKey: 'expenses',
     description: 'Électricité, gaz, personnel, entretien… (hors achats d’ingrédients).',
-    columns: [dateCol('date'), textCol('label', 'Libellé'), textCol('category', 'Catégorie'), moneyCol('amount', 'Montant')],
+    columns: [dateCol('date'), textCol('scope', 'Activité', { cell: (c: any) => (c.getValue() === 'hotel' ? 'Hôtel' : 'Restaurant') }), textCol('label', 'Libellé'), textCol('category', 'Catégorie'), moneyCol('amount', 'Montant')],
     fields: [
       { name: 'date', label: 'Date', type: 'date' },
+      { name: 'scope', label: 'Activité', type: 'select', options: [{ value: 'restaurant', label: 'Restaurant' }, { value: 'hotel', label: 'Hôtel' }] },
       { name: 'category', label: 'Catégorie', type: 'select', options: opt(EXPENSE_CATEGORIES) },
       { name: 'label', label: 'Libellé', type: 'text', span: 2, placeholder: 'Facture JIRAMA' },
       { name: 'amount', label: 'Montant (Ar)', type: 'number', step: '1', inputMode: 'numeric' },
     ],
-    schema: expenseSchema, defaults: { date: todayStr(), category: 'Autre', label: '', amount: 0 },
+    schema: expenseSchema, defaults: { date: todayStr(), scope: 'restaurant', category: 'Autre', label: '', amount: 0 },
   };
   return <CrudPage cfg={cfg} />;
 }

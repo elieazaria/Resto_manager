@@ -30,7 +30,7 @@ export function DateField({ value, onChange, min, max, className, id, 'aria-labe
   const dim = p.y && p.m ? daysIn(p.y, p.m) : 31;
 
   return (
-    <div className={cn('inline-flex items-center gap-1.5', className)} role="group" aria-label={label}>
+    <div className={cn('flex w-fit items-center gap-1.5', className)} role="group" aria-label={label}>
       <select id={id} className={cn(sel, 'w-[4.25rem]')} value={p.d || ''} onChange={(e) => commit({ ...p, d: +e.target.value })} aria-label={`${label ?? 'Date'} : jour`}>
         <option value="" disabled>Jj</option>
         {Array.from({ length: dim }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{pad(d)}</option>)}

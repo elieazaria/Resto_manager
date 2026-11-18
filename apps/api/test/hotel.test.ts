@@ -213,3 +213,45 @@ describe('réservation groupée : total et paiement unique', () => {
     expect(p2.json.reservations.every((r: any) => r.balance === 0)).toBe(true);
   });
 });
+
+describe('groupe : acompte par chambre', () => {
+  it('chaque chambre porte son acompte ; un acompte trop élevé est refusé', async () => {
+    const rooms = (await call('GET', '/api/hotel/rooms')).json;
+    const body = { new_client: { full_name: 'Acomptes' }, arrival: day(300), departure: day(301), deposit_method: 'mvola', rooms: [{ room_id: rooms[2].id, price_per_night: 150000, deposit: 75000 }, { room_id: rooms[3].id, price_per_night: 400000, deposit: 200000 }] };
+    const bad = await call('POST', '/api/hotel/reservations/group', { ...body, rooms: [{ ...body.rooms[0], deposit: 999999999 }, body.rooms[1]] });
+    expect(bad.status).toBe(400);
+    const g = await call('POST', '/api/hotel/reservations/group', body);
+    expect(g.status).toBe(201);
+    const paid = Object.fromEntries(g.json.map((r: any) => [r.room_id, r.paid_amount]));
+    expect(paid[rooms[2].id]).toBe(75000);
+    expect(paid[rooms[3].id]).toBe(200000);
+    const t = (await call('GET', `/api/hotel/groups/${g.json[0].group_id}`)).json.totals;
+    expect(t.paid).toBe(275000);
+  });
+});
+
+describe('rapport hôtel : résultat net', () => {
+  it('CA = séjours + ventes sur place, dépenses « hôtel » seulement, net = CA - dépenses', async () => {
+    const from = '2031-03-01', to = '2031-03-31';
+    const rooms = (await call('GET', '/api/hotel/rooms')).json;
+    const before = (await call('GET', `/api/hotel/report?from=${from}&to=${to}`)).json;
+    expect(before.revenue).toBe(0);
+    const res = await call('POST', '/api/hotel/reservations', { new_client: { full_name: 'Rapport' }, room_id: rooms[5].id, arrival: '2031-03-10', departure: '2031-03-12', adults: 2, children: 0, price_per_night: 100000, discount_percent: 0, discount_amount: 0, status: 'confirmed' });
+    expect(res.status).toBe(201);
+    const svc = (await call('GET', '/api/hotel/services')).json[0];
+    await call('POST', '/api/hotel/walkins', { service_id: svc.id, label: 'Piscine', unit_price: 20000, quantity: 2, method: 'cash', sold_on: '2031-03-15' });
+    await call('POST', '/api/expenses', { date: '2031-03-20', label: 'Électricité hôtel', category: 'Autre', amount: 50000, scope: 'hotel' });
+    await call('POST', '/api/expenses', { date: '2031-03-20', label: 'Gaz resto', category: 'Autre', amount: 30000 });
+    const r = (await call('GET', `/api/hotel/report?from=${from}&to=${to}`)).json;
+    expect(r.reservations).toBe(1);
+    expect(r.nights).toBe(2);
+    expect(r.walkins).toBe(40000);
+    expect(r.revenue).toBe(res.json.net_amount + 40000);
+    expect(r.expenses).toBe(50000);
+    expect(r.net).toBe(r.revenue - 50000);
+    const y = (await call('GET', '/api/hotel/yearly?year=2031')).json;
+    expect(y).toHaveLength(12);
+    expect(y[2].net).toBe(r.net);
+    expect((await call('GET', `/api/hotel/report?from=${to}&to=${from}`)).status).toBe(400);
+  });
+});

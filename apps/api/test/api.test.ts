@@ -331,6 +331,11 @@ describe('ventes antérieures et suppression définitive', () => {
     expect(r.json.total).toBe(6000);
     expect(r.json.business_date).toBe(day);
     expect(await stockQty(ids.coca)).toBe(before - 2);
+    const onT2 = await t.call('POST', '/api/sales/backdated', { token: admin, body: { date: day, payment_method: 'cash', table_id: ids.t2, update_stock: false, lines: [{ menu_item_id: ids.cocaMenu, quantity: 1 }] } });
+    expect(onT2.status).toBe(201);
+    expect(onT2.json.table_id).toBe(ids.t2);
+    const badTable = await t.call('POST', '/api/sales/backdated', { token: admin, body: { date: day, payment_method: 'cash', table_id: '00000000-0000-4000-8000-000000000000', lines: [{ menu_item_id: ids.cocaMenu, quantity: 1 }] } });
+    expect(badTable.status).toBe(400);
     const future = await t.call('POST', '/api/sales/backdated', { token: admin, body: { date: '2999-01-01', payment_method: 'cash', lines: [{ menu_item_id: ids.cocaMenu, quantity: 1 }] } });
     expect(future.status).toBe(400);
     expect((await t.call('POST', '/api/sales/backdated', { token: cashier, body: {} })).status).toBe(403);
@@ -351,5 +356,18 @@ describe('ventes antérieures et suppression définitive', () => {
     expect((await t.call('DELETE', `/api/users/${u.id}?force=true`, { token: admin })).status).toBe(204);
     expect((await t.call('GET', '/api/users', { token: admin })).json.some((x: any) => x.username === 'temp')).toBe(false);
     expect((await t.call('GET', `/api/orders/${oid}`, { token: admin })).status).toBe(200); // vente conservée
+  });
+});
+
+describe('rapport de ventes', () => {
+  it('total, ticket moyen, meilleures ventes sur une période', async () => {
+    const r = (await t.call('GET', `/api/dashboard/report?from=${today().slice(0, 4)}-01-01&to=${today()}`, { token: admin })).json;
+    expect(r.orders).toBeGreaterThan(0);
+    expect(r.avg_ticket).toBe(Math.round(r.total / r.orders));
+    expect(r.top_items.length).toBeGreaterThan(0);
+    expect(r.by_method.length).toBeGreaterThan(0);
+    expect(r.series.reduce((s: number, x: any) => s + x.total, 0)).toBe(r.total);
+    expect((await t.call('GET', '/api/dashboard/report?from=2026-05-02&to=2026-05-01', { token: admin })).status).toBe(400);
+    expect((await t.call('GET', `/api/dashboard/report?from=${today()}&to=${today()}`, { token: cashier })).status).toBe(403);
   });
 });

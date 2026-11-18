@@ -126,7 +126,11 @@ export const purchaseSchema = z.object({
   note: optionalText(),
 });
 
+export const EXPENSE_SCOPES = ['restaurant', 'hotel'] as const;
+export type ExpenseScope = (typeof EXPENSE_SCOPES)[number];
+export const EXPENSE_SCOPE_LABELS: Record<ExpenseScope, string> = { restaurant: 'Restaurant', hotel: 'Hôtel' };
 export const expenseSchema = z.object({
+  scope: z.enum(EXPENSE_SCOPES).default('restaurant'),
   date: dateSchema,
   label: text('Libellé'),
   category: z.string().trim().min(1).max(40),
@@ -428,8 +432,10 @@ export const reservationCreateSchema = reservationBase
 export const reservationGroupSchema = reservationBase
   .omit({ price_per_night: true })
   .extend({
-    rooms: z.array(z.object({ room_id: idSchema, price_per_night: money('Prix par nuit') })).min(1, 'Choisissez au moins une chambre').max(30),
-    deposit: depositSchema.optional(),
+    /** Chaque chambre du groupe porte son propre acompte (`deposit`, en Ar). */
+    rooms: z.array(z.object({ room_id: idSchema, price_per_night: money('Prix par nuit'), deposit: money('Acompte').default(0) })).min(1, 'Choisissez au moins une chambre').max(30),
+    deposit_method: z.enum(HOTEL_PAYMENT_METHODS).default('cash'),
+    deposit_paid_on: dateSchema.optional(),
   })
   .refine((v) => !!v.client_id || !!v.new_client, { path: ['client_id'], message: 'Choisissez ou créez un client' })
   .refine(dateOrder, { path: ['departure'], message: 'Le départ doit être après l’arrivée' });
@@ -624,6 +630,8 @@ export const backdatedSaleSchema = z.object({
   payment_method: z.enum(PAYMENT_METHODS),
   lines: z.array(z.object({ menu_item_id: idSchema, quantity: z.number().int().min(1).max(999) })).min(1, 'Ajoutez au moins un plat').max(60),
   update_stock: z.boolean().default(true),
+  /** Table à laquelle rattacher la vente (par défaut : la première table). */
+  table_id: idSchema.nullish(),
   note: z.string().trim().max(200).nullish(),
 });
 export type BackdatedSale = z.infer<typeof backdatedSaleSchema>;
@@ -665,3 +673,38 @@ export interface HotelWalkinDto {
   id: string; service_id: string | null; label: string; unit_price: number; quantity: number; amount: number;
   method: HotelPaymentMethod; sold_on: string; customer: string | null; note: string | null; created_at: string;
 }
+
+/** Statistiques de l'hôtel sur une période [from, to] (CA rattaché à la date d'arrivée, nuitées au prorata). */
+export interface HotelReportDto {
+  from: string;
+  to: string;
+  days: number;
+  rooms: number;
+  reservations: number;
+  nights: number;
+  occupancy_percent: number;
+  /** Prix moyen par nuitée hébergement (Ar). */
+  adr: number;
+  /** Revenu hébergement par chambre disponible et par jour. */
+  revpar: number;
+  lodging: number;
+  extras: number;
+  tourist_tax: number;
+  discounts: number;
+  walkins: number;
+  walkin_people: number;
+  /** CA total = séjours (nets) + ventes sur place. */
+  revenue: number;
+  expenses: number;
+  /** Résultat net = CA - dépenses de l'hôtel. */
+  net: number;
+  margin_percent: number;
+  collected: number;
+  expenses_by_category: { category: string; total: number }[];
+  by_method: { method: HotelPaymentMethod; total: number }[];
+  by_room_type: { name: string; reservations: number; nights: number; revenue: number }[];
+  top_extras: { label: string; quantity: number; revenue: number }[];
+  walkins_by_service: { label: string; quantity: number; revenue: number }[];
+  series: { date: string; total: number }[];
+}
+export interface HotelYearlyRowDto { month: number; reservations: number; nights: number; revenue: number; expenses: number; net: number }

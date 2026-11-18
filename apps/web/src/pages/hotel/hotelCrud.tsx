@@ -141,7 +141,7 @@ function AccountDialog({ client, onClose, onOpen }: { client: any | null; onClos
               {a.reservations.map((r) => (
                 <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                   <button className="text-left hover:underline" onClick={() => onOpen(r.id)}><b className="num">{r.ref}</b><br /><span className="text-muted-foreground">Ch. {r.room_number} · {fmtDate(r.arrival)} → {fmtDate(r.departure)} · {HOTEL_STATUS_LABELS[r.status]}</span></button>
-                  <span className="num text-right">{money(r.net_amount)}<br /><Badge tone={PAY_TONE[r.pay_status]}>{PAY_LABEL[r.pay_status]}</Badge></span>
+                  <span className="num text-right">{money(r.net_amount)}<br /><span className="text-xs text-muted-foreground">payé {money(r.paid_amount)}{r.status !== 'cancelled' && r.balance > 0 ? ` · reste ${money(r.balance)}` : ''}</span><br /><Badge tone={PAY_TONE[r.pay_status]}>{PAY_LABEL[r.pay_status]}</Badge></span>
                 </li>
               ))}
               {!a.reservations.length && <li className="py-4 text-center text-muted-foreground">Aucun séjour.</li>}

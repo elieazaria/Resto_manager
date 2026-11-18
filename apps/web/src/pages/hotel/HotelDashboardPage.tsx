@@ -6,6 +6,8 @@ import { StatCard, type Tone } from '@/components/ui/stat-card';
 import { Card } from '@/components/ui/card';
 import { PageHeader } from '@/components/PageHeader';
 import { api } from '@/lib/api';
+import { HotelReportCard } from './HotelReportCard';
+import type { HotelReportDto } from '@resto/shared';
 import { compactAr, fmtDate, money } from '@/lib/format';
 import { LIVE_COLOR, STATUS_COLOR } from '@/lib/hotel';
 
@@ -15,12 +17,24 @@ const Kpi = ({ label, value, hint, tone, icon }: { label: string; value: string;
 export default function HotelDashboardPage() {
   const q = useQuery({ queryKey: ['hotel', 'dashboard'], queryFn: () => api<HotelDashboardDto>('/hotel/dashboard'), refetchInterval: 30_000 });
   const d = q.data;
+  const month = d ? d.date.slice(0, 7) : '';
+  const last = d ? new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate() : 0;
+  const rep = useQuery({ queryKey: ['hotel', 'report', `${month}-01`, `${month}-${last}`], queryFn: () => api<HotelReportDto>(`/hotel/report?from=${month}-01&to=${month}-${String(last).padStart(2, '0')}`), enabled: !!d });
+  const m = rep.data;
   if (!d) return <p className="p-10 text-center text-muted-foreground">Chargement…</p>;
   const monthly = d.monthly.map((m) => ({ ...m, label: `${MONTHS[Number(m.month.slice(5)) - 1]} ${m.month.slice(2, 4)}` }));
   const weekly = d.weekly.map((w) => ({ ...w, label: fmtDate(w.week_start).slice(0, 5) }));
   return (
     <div className="space-y-5">
       <PageHeader title="Tableau de bord hôtel" description={`Situation au ${fmtDate(d.date)}`} />
+      {m && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Kpi tone="green" icon={Coins} label="CA du mois" value={money(m.revenue)} hint="Séjours + ventes sur place" />
+          <Kpi tone="red" icon={Wallet} label="Dépenses du mois" value={money(m.expenses)} hint="Dépenses « Hôtel »" />
+          <Kpi tone={m.net < 0 ? 'red' : 'blue'} icon={HandCoins} label="Résultat net du mois" value={money(m.net)} hint={`CA - dépenses · marge ${m.margin_percent} %`} />
+          <Kpi tone="violet" icon={BedDouble} label="RevPAR / prix moyen" value={money(m.revpar)} hint={`Nuitée moyenne ${money(m.adr)}`} />
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi tone="green" icon={BedDouble} label="Taux d’occupation" value={`${d.occupancy_percent} %`} hint={`${d.occupied_today} / ${d.units_total} chambres`} />
         <Kpi tone="blue" icon={CalendarCheck} label="Arrivées aujourd’hui" value={String(d.arrivals_today)} hint={`${d.upcoming_7d} dans les 7 jours`} />
@@ -55,6 +69,7 @@ export default function HotelDashboardPage() {
         <Card className="p-4"><h2 className="mb-2 font-display text-lg font-semibold">Encaissé ce mois par mode</h2>
           {d.by_method.length ? <ul className="space-y-1.5 text-sm">{d.by_method.map((m) => <li key={m.method} className="flex items-center justify-between"><span>{HOTEL_PAYMENT_LABELS[m.method]}</span><b className="num">{money(m.total)}</b></li>)}</ul> : <p className="text-sm text-muted-foreground">Aucun encaissement.</p>}</Card>
       </div>
+      <HotelReportCard />
     </div>
   );
 }

@@ -43,6 +43,8 @@ export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
   const [discAmt, setDiscAmt] = useState('');
   const [status, setStatus] = useState<'option' | 'confirmed'>('confirmed');
   const [deposit, setDeposit] = useState('');
+  const [deps, setDeps] = useState<Record<string, number>>({});
+  const multi = roomIds.length > 1 || group;
   const [method, setMethod] = useState<HotelPaymentMethod>('cash');
   const [note, setNote] = useState('');
   const [cin, setCin] = useState('');
@@ -52,7 +54,7 @@ export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
   useEffect(() => {
     if (!open) return;
     const a = initial?.arrival ?? todayStr();
-    setCin(''); setCout('');
+    setCin(''); setCout(''); setDeps({});
     setArrival(a); setDeparture(shiftDate(a, 1)); setRoomIds(initial?.room_id ? [initial.room_id] : []);
     setGroup(false); setNewClient(false); setClientId(''); setNc({ full_name: '', phone: '', email: '' }); setAdults(1); setChildren(0);
     setPrices({}); setExtras([]); setDiscPct(''); setDiscAmt(''); setStatus('confirmed'); setDeposit(''); setMethod('cash'); setNote('');
@@ -85,19 +87,25 @@ export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
     if (!roomIds.length) return toast.error('Choisissez une chambre');
     if (!newClient && !clientId) return toast.error('Choisissez ou créez un client');
     if (newClient && !nc.full_name.trim()) return toast.error('Nom du client requis');
-    const dep = num(deposit);
+    const dep = multi ? roomIds.reduce((a, id) => a + (deps[id] ?? 0), 0) : num(deposit);
     if (dep > net) return toast.error('L’acompte dépasse le net du séjour');
+    for (const id of roomIds) {
+      const roomGross = nights * (prices[id] ?? 0);
+      if (multi && (deps[id] ?? 0) > roomGross + (settings.data?.tourist_tax_per_person_night ?? 0) * adults * nights + (id === roomIds[0] ? extrasTotal : 0))
+        return toast.error(`L’acompte de la chambre ${activeRooms.find((x) => x.id === id)?.number ?? ''} dépasse son total`);
+    }
     const body: any = {
       ...(newClient ? { new_client: { full_name: nc.full_name.trim(), phone: nc.phone, email: nc.email } } : { client_id: clientId }),
       arrival, departure, adults, children, status, note: note || null,
       checkin_time: cin && cin !== hs.data?.checkin_time ? cin : null, checkout_time: cout && cout !== hs.data?.checkout_time ? cout : null,
       discount_percent: discAmt ? 0 : pct, discount_amount: discount,
       extras: extras.filter((e) => e.quantity > 0).map((e) => ({ service_id: e.service_id, label: e.label, unit_price: e.unit_price, quantity: e.quantity, multiplier: e.per_night ? nights : 1 })),
-      ...(dep > 0 ? { deposit: { amount: dep, method } } : {}),
+      ...(!multi && dep > 0 ? { deposit: { amount: dep, method } } : {}),
+      ...(multi ? { deposit_method: method } : {}),
     };
     setBusy(true);
     try {
-      if (roomIds.length > 1 || group) await api('/hotel/reservations/group', { method: 'POST', body: { ...body, rooms: roomIds.map((id) => ({ room_id: id, price_per_night: prices[id] ?? 0 })) } });
+      if (roomIds.length > 1 || group) await api('/hotel/reservations/group', { method: 'POST', body: { ...body, rooms: roomIds.map((id) => ({ room_id: id, price_per_night: prices[id] ?? 0, deposit: deps[id] ?? 0 })) } });
       else await api('/hotel/reservations', { method: 'POST', body: { ...body, room_id: roomIds[0], price_per_night: prices[roomIds[0]!] ?? 0 } });
       toast.success('Réservation créée');
       void qc.invalidateQueries({ queryKey: ['hotel'] });
@@ -169,6 +177,11 @@ export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
                   <span className="w-28 font-medium">{r?.number}</span>
                   <Label className="text-muted-foreground">Prix / nuit</Label>
                   <NumberField className="w-44" stepper={false} inputClassName="h-9 text-right" value={prices[id] ?? 0} onChange={(n) => setPrices((p) => ({ ...p, [id]: n }))} aria-label={`Prix par nuit ${r?.number ?? ''}`} />
+                  {multi && (<>
+                    <Label className="text-muted-foreground">Acompte</Label>
+                    <NumberField className="w-36" stepper={false} inputClassName="h-9 text-right" value={deps[id] ?? 0} onChange={(n) => setDeps((p) => ({ ...p, [id]: n }))} aria-label={`Acompte chambre ${r?.number ?? ''}`} />
+                    <button type="button" className="text-xs text-primary underline" onClick={() => setDeps((p) => ({ ...p, [id]: Math.round((nights * (prices[id] ?? 0)) / 2) }))}>50 %</button>
+                  </>)}
                   {q && q.nightly.some((n) => n.rule) && <span className="text-xs text-muted-foreground">tarif dynamique : {[...new Set(q.nightly.map((n) => n.rule).filter(Boolean))].join(', ')}</span>}
                 </div>
               );
@@ -199,7 +212,9 @@ export function ReservationDialog({ open, onOpenChange, initial, onCreated }: {
             <div className="space-y-1.5"><Label>Remise (Ar)</Label><Input type="number" min={0} value={discAmt} onChange={(e) => setDiscAmt(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>Statut</Label>
               <Select value={status} onChange={(e) => setStatus(e.target.value as any)}><option value="confirmed">Confirmée</option><option value="option">En option</option></Select></div>
-            <div className="space-y-1.5"><Label>Acompte (Ar)</Label><Input type="number" min={0} value={deposit} onChange={(e) => setDeposit(e.target.value)} /></div>
+            {multi
+              ? <div className="space-y-1.5"><Label>Acompte total</Label><p className="num flex h-11 items-center font-semibold">{money(roomIds.reduce((a, id) => a + (deps[id] ?? 0), 0))}<span className="ml-2 text-xs font-normal text-muted-foreground">saisi par chambre</span></p></div>
+              : <div className="space-y-1.5"><Label>Acompte (Ar)</Label><Input type="number" min={0} value={deposit} onChange={(e) => setDeposit(e.target.value)} /></div>}
             <div className="space-y-1.5"><Label>Mode de paiement</Label>
               <Select value={method} onChange={(e) => setMethod(e.target.value as any)}>{HOTEL_PAYMENT_METHODS.map((m) => <option key={m} value={m}>{HOTEL_PAYMENT_LABELS[m]}</option>)}</Select></div>
             <div className="space-y-1.5"><Label>Heure d’arrivée</Label><TimeField24 value={cin || hs.data?.checkin_time || '14:00'} onChange={setCin} aria-label="Heure d’arrivée" /></div>

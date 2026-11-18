@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { fmtDate, money, shiftDate, todayStr } from '@/lib/format';
 import { errorMessage } from '@/lib/utils';
 
+interface TableRow { id: string; name: string; is_active?: boolean }
 interface Item { id: string; name: string; price: number; category_name: string; is_active: boolean }
 interface Line { menu_item_id: string; quantity: number }
 interface Done { id: string; date: string; total: number; method: PaymentMethod; n: number }
@@ -20,6 +21,9 @@ interface Done { id: string; date: string; total: number; method: PaymentMethod;
 export default function BackdatedSalesPage() {
   const qc = useQueryClient();
   const items = useQuery({ queryKey: ['menu-items'], queryFn: () => api<Item[]>('/menu-items') });
+  const tables = useQuery({ queryKey: ['pos-tables'], queryFn: () => api<TableRow[]>('/pos/tables') });
+  const [tableId, setTableId] = useState('');
+  const table = tableId || tables.data?.[0]?.id || '';
   const [date, setDate] = useState(shiftDate(todayStr(), -1));
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [updateStock, setUpdateStock] = useState(true);
@@ -48,7 +52,7 @@ export default function BackdatedSalesPage() {
   });
 
   const save = useMutation({
-    mutationFn: () => api<{ id: string; total: number }>('/sales/backdated', { method: 'POST', body: { date, payment_method: method, update_stock: updateStock, note: note || null, lines: valid } }),
+    mutationFn: () => api<{ id: string; total: number }>('/sales/backdated', { method: 'POST', body: { date, payment_method: method, update_stock: updateStock, table_id: table || null, note: note || null, lines: valid } }),
     onSuccess: (o) => {
       toast.success(`Vente du ${fmtDate(date)} enregistrée (${money(o.total)})`);
       setDone((d) => [{ id: o.id, date, total: o.total, method, n: valid.length }, ...d]);
@@ -63,11 +67,13 @@ export default function BackdatedSalesPage() {
       <PageHeader title="Saisie de ventes antérieures" description="Enregistrez une vente passée à la date de votre choix : elle apparaît au tableau de bord, aux ventes et à la rentabilité à cette date." />
 
       <Card className="p-4">
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5"><Label htmlFor="d">Date de la vente</Label><DateField id="d" max={todayStr()} value={date} onChange={setDate} /></div>
           <div className="space-y-1.5"><Label htmlFor="m">Mode de paiement</Label>
             <Select id="m" value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>{PAYMENT_METHODS.map((m) => <option key={m} value={m}>{PAYMENT_LABELS[m]}</option>)}</Select></div>
-          <div className="space-y-1.5"><Label htmlFor="n">Note (facultatif)</Label><Input id="n" value={note} onChange={(e) => setNote(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="t">Table</Label>
+            <Select id="t" value={table} onChange={(e) => setTableId(e.target.value)}>{(tables.data ?? []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</Select></div>
+          <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="n">Note (facultatif)</Label><Input id="n" value={note} onChange={(e) => setNote(e.target.value)} /></div>
         </div>
       </Card>
 

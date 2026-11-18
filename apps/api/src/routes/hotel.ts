@@ -24,7 +24,7 @@ import {
 import { audit } from '../auth.js';
 import type { Ctx } from '../context.js';
 import { idParam, registerCrud } from '../crud.js';
-import { notFound } from '../errors.js';
+import { badRequest, notFound } from '../errors.js';
 import {
   addPayment,
   addGroupPayment,
@@ -51,6 +51,7 @@ import {
   updateReservation,
   ensureHotelBase,
 } from '../services/hotel.js';
+import { hotelReport, hotelYearly } from '../services/hotelReport.js';
 
 export function hotelRoutes(app: FastifyInstance, ctx: Ctx) {
   const admin = { preHandler: ctx.auth.require('admin') };
@@ -216,6 +217,17 @@ export function hotelRoutes(app: FastifyInstance, ctx: Ctx) {
         balance: Math.max(0, live.reduce((s, r) => s + r.net_amount, 0) - live.reduce((s, r) => s + r.paid_amount, 0)),
       },
     };
+  });
+
+  app.get('/hotel/report', admin, async (req) => {
+    const q = z.object({ from: dateSchema, to: dateSchema }).parse(req.query);
+    if (q.to < q.from) throw badRequest('La fin doit suivre le début');
+    if ((Date.parse(q.to) - Date.parse(q.from)) / 86_400_000 > 800) throw badRequest('Période trop longue (800 jours maximum)');
+    return hotelReport(ctx.db, q.from, q.to);
+  });
+  app.get('/hotel/yearly', admin, async (req) => {
+    const { year = Number(todayInTz(tz).slice(0, 4)) } = z.object({ year: z.coerce.number().int().min(2000).max(2100).optional() }).parse(req.query);
+    return hotelYearly(ctx.db, year);
   });
 
   app.get('/hotel/dashboard', admin, async () => hotelDashboard(ctx.db, tz));

@@ -40,7 +40,7 @@ export function dashboardRoutes(app: FastifyInstance, ctx: Ctx) {
       db.query<{ d: number; m: number }>(
         `select coalesce(sum(amount) filter (where date = $1::date), 0)::bigint as d,
                 coalesce(sum(amount), 0)::bigint as m
-         from expenses where date >= $2::date and date < $3::date`,
+         from expenses where scope = 'restaurant' and date >= $2::date and date < $3::date`,
         [date, start, next],
       ),
       db.query<{ date: string; total: number }>(
@@ -104,7 +104,7 @@ export function dashboardRoutes(app: FastifyInstance, ctx: Ctx) {
         (select count(*) from orders where status = 'paid' and business_date >= make_date($1, m::int, 1) and business_date < make_date($1, m::int, 1) + interval '1 month')::bigint as orders,
         coalesce((select sum(total) from orders where status = 'paid' and business_date >= make_date($1, m::int, 1) and business_date < make_date($1, m::int, 1) + interval '1 month'), 0)::bigint as sales,
         coalesce((select sum(round(quantity * unit_price)) from purchases where date >= make_date($1, m::int, 1) and date < make_date($1, m::int, 1) + interval '1 month'), 0)::bigint as purchases,
-        coalesce((select sum(amount) from expenses where date >= make_date($1, m::int, 1) and date < make_date($1, m::int, 1) + interval '1 month'), 0)::bigint as expenses
+        coalesce((select sum(amount) from expenses where scope = 'restaurant' and date >= make_date($1, m::int, 1) and date < make_date($1, m::int, 1) + interval '1 month'), 0)::bigint as expenses
        from generate_series(1, 12) m order by m`,
       [year],
     );
